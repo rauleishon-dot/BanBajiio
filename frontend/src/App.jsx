@@ -16,17 +16,18 @@ const LogoBanbajio = ({ size = 32 }) => (
   </svg>
 );
 
+const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 export default function BanbajioApp() {
   const [pantalla, setPantalla] = useState('login');
   const [usuario, setUsuario] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [loading, setLoading] = useState(false);
-  const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     if (token) {
       fetch(`${apiUrl}/perfil`, { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(res => res.json())
+        .then(r => r.json())
         .then(data => {
           if (data._id) {
             setUsuario(data);
@@ -57,7 +58,7 @@ export default function BanbajioApp() {
         alert('Error: ' + data.error);
       }
     } catch (error) {
-      alert('Error al conectar: ' + error.message);
+      alert('Error: ' + error.message);
     }
     setLoading(false);
   };
@@ -69,15 +70,9 @@ export default function BanbajioApp() {
     setPantalla('login');
   };
 
-  if (pantalla === 'login') {
-    return <LoginScreen login={login} loading={loading} />;
-  }
-  if (pantalla === 'clienteDashboard') {
-    return <ClienteDashboard usuario={usuario} logout={logout} token={token} apiUrl={apiUrl} />;
-  }
-  if (pantalla === 'adminDashboard') {
-    return <AdminDashboard usuario={usuario} logout={logout} token={token} apiUrl={apiUrl} />;
-  }
+  if (pantalla === 'login') return <LoginScreen login={login} loading={loading} />;
+  if (pantalla === 'clienteDashboard') return <ClienteDashboard usuario={usuario} logout={logout} token={token} />;
+  if (pantalla === 'adminDashboard') return <AdminDashboard usuario={usuario} logout={logout} token={token} />;
 }
 
 function LoginScreen({ login, loading }) {
@@ -106,11 +101,11 @@ function LoginScreen({ login, loading }) {
             </div>
           </div>
           <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition disabled:bg-gray-400">
-            {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            {loading ? 'Iniciando...' : 'Iniciar Sesión'}
           </button>
         </form>
         <div className="mt-6 p-4 bg-blue-50 rounded-lg text-sm text-gray-700">
-          <p className="font-semibold mb-2">Demo - Admin:</p>
+          <p className="font-semibold mb-2">Demo Admin:</p>
           <p>📧 admin@banbajio.com</p>
           <p>🔑 Admin123!</p>
         </div>
@@ -119,7 +114,7 @@ function LoginScreen({ login, loading }) {
   );
 }
 
-function ClienteDashboard({ usuario, logout, token, apiUrl }) {
+function ClienteDashboard({ usuario, logout, token }) {
   const [showBalance, setShowBalance] = useState(false);
   const [transacciones, setTransacciones] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -132,22 +127,18 @@ function ClienteDashboard({ usuario, logout, token, apiUrl }) {
     cargarDatos();
   }, []);
 
-  const cargarDatos = async () => {
-    try {
-      const tx = await fetch(`${apiUrl}/mis-transacciones`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
-      const us = await fetch(`${apiUrl}/usuarios`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+  const cargarDatos = () => {
+    Promise.all([
+      fetch(`${apiUrl}/mis-transacciones`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+      fetch(`${apiUrl}/usuarios`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json())
+    ]).then(([tx, us]) => {
       setTransacciones(tx);
       setUsuarios(us);
-    } catch (error) {
-      console.error('Error:', error);
-    }
+    }).catch(e => console.error(e));
   };
 
   const realizar = async () => {
-    if (!receptorId || !monto) {
-      alert('Completa los campos');
-      return;
-    }
+    if (!receptorId || !monto) { alert('Completa los campos'); return; }
     setLoading(true);
     try {
       const res = await fetch(`${apiUrl}/transferencia`, {
@@ -177,7 +168,6 @@ function ClienteDashboard({ usuario, logout, token, apiUrl }) {
         <div className="flex items-center gap-2"><LogoBanbajio size={32} /><h1 className="text-2xl font-bold">Banbajío</h1></div>
         <button onClick={logout} className="p-2 bg-red-600 rounded-lg hover:bg-red-700"><LogOut size={20} /></button>
       </div>
-
       <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-2xl p-6 shadow-lg mb-6">
         <div className="flex justify-between mb-8">
           <div>
@@ -193,11 +183,9 @@ function ClienteDashboard({ usuario, logout, token, apiUrl }) {
         </div>
         <p className="font-mono">{usuario.numeroTarjeta}</p>
       </div>
-
       <button onClick={() => setShowTransfer(true)} className="w-full bg-white bg-opacity-20 rounded-xl p-4 mb-6 hover:bg-opacity-30 transition flex items-center justify-center gap-2">
         <Send size={24} /><span className="text-lg font-semibold">Realizar Transferencia</span>
       </button>
-
       <div>
         <h3 className="text-lg font-bold mb-4">Transacciones</h3>
         {transacciones.length > 0 ? (
@@ -220,7 +208,6 @@ function ClienteDashboard({ usuario, logout, token, apiUrl }) {
           <p className="text-blue-200 text-center py-8">No hay transacciones</p>
         )}
       </div>
-
       {showTransfer && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end z-50">
           <div className="bg-white text-gray-900 rounded-t-3xl w-full p-6">
@@ -228,9 +215,7 @@ function ClienteDashboard({ usuario, logout, token, apiUrl }) {
             <div className="space-y-4">
               <select value={receptorId} onChange={(e) => setReceptorId(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
                 <option value="">Selecciona usuario</option>
-                {usuarios.map(u => (
-                  <option key={u._id} value={u._id}>{u.nombre}</option>
-                ))}
+                {usuarios.map(u => (<option key={u._id} value={u._id}>{u.nombre}</option>))}
               </select>
               <input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
               <div className="flex gap-3">
@@ -247,7 +232,7 @@ function ClienteDashboard({ usuario, logout, token, apiUrl }) {
   );
 }
 
-function AdminDashboard({ usuario, logout, token, apiUrl }) {
+function AdminDashboard({ usuario, logout, token }) {
   const [tab, setTab] = useState('clientes');
   const [clientes, setClientes] = useState([]);
   const [transacciones, setTransacciones] = useState([]);
@@ -262,22 +247,18 @@ function AdminDashboard({ usuario, logout, token, apiUrl }) {
     cargarDatos();
   }, []);
 
-  const cargarDatos = async () => {
-    try {
-      const c = await fetch(`${apiUrl}/admin/clientes`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
-      const tx = await fetch(`${apiUrl}/admin/transacciones`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json());
+  const cargarDatos = () => {
+    Promise.all([
+      fetch(`${apiUrl}/admin/clientes`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+      fetch(`${apiUrl}/admin/transacciones`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json())
+    ]).then(([c, tx]) => {
       setClientes(c);
       setTransacciones(tx);
-    } catch (error) {
-      console.error('Error:', error);
-    }
+    }).catch(e => console.error(e));
   };
 
   const crear = async () => {
-    if (!nombre || !email || !contraseña) {
-      alert('Completa los campos');
-      return;
-    }
+    if (!nombre || !email || !contraseña) { alert('Completa los campos'); return; }
     setLoading(true);
     try {
       const res = await fetch(`${apiUrl}/admin/clientes`, {
@@ -309,67 +290,29 @@ function AdminDashboard({ usuario, logout, token, apiUrl }) {
         <div className="flex items-center gap-2"><LogoBanbajio size={40} /><h1 className="text-2xl font-bold">Banbajío Admin</h1></div>
         <button onClick={logout} className="p-2 bg-red-600 rounded-lg"><LogOut size={20} /></button>
       </div>
-
       <div className="flex gap-4 mb-6">
-        <button onClick={() => setTab('clientes')} className={`px-6 py-2 rounded-lg ${tab === 'clientes' ? 'bg-blue-600' : 'bg-white bg-opacity-10'}`}>
-          Clientes ({clientes.length})
-        </button>
-        <button onClick={() => setTab('transacciones')} className={`px-6 py-2 rounded-lg ${tab === 'transacciones' ? 'bg-blue-600' : 'bg-white bg-opacity-10'}`}>
-          Transacciones ({transacciones.length})
-        </button>
+        <button onClick={() => setTab('clientes')} className={`px-6 py-2 rounded-lg ${tab === 'clientes' ? 'bg-blue-600' : 'bg-white bg-opacity-10'}`}>Clientes ({clientes.length})</button>
+        <button onClick={() => setTab('transacciones')} className={`px-6 py-2 rounded-lg ${tab === 'transacciones' ? 'bg-blue-600' : 'bg-white bg-opacity-10'}`}>Transacciones ({transacciones.length})</button>
       </div>
-
       {tab === 'clientes' && (
         <div>
-          <button onClick={() => setShowNuevo(true)} className="mb-6 px-4 py-2 bg-green-600 rounded-lg flex gap-2">
-            <Plus size={20} /> Crear Cliente
-          </button>
+          <button onClick={() => setShowNuevo(true)} className="mb-6 px-4 py-2 bg-green-600 rounded-lg flex gap-2"><Plus size={20} /> Crear Cliente</button>
           <div className="bg-white bg-opacity-10 rounded-xl overflow-x-auto">
             <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-white border-opacity-20">
-                  <th className="px-6 py-3">Nombre</th>
-                  <th className="px-6 py-3">Email</th>
-                  <th className="px-6 py-3">Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientes.map(c => (
-                  <tr key={c._id} className="border-b border-white border-opacity-10">
-                    <td className="px-6 py-3">{c.nombre}</td>
-                    <td className="px-6 py-3">{c.email}</td>
-                    <td className="px-6 py-3">${c.saldo.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
+              <thead><tr className="border-b border-white border-opacity-20"><th className="px-6 py-3">Nombre</th><th className="px-6 py-3">Email</th><th className="px-6 py-3">Saldo</th></tr></thead>
+              <tbody>{clientes.map(c => (<tr key={c._id} className="border-b border-white border-opacity-10"><td className="px-6 py-3">{c.nombre}</td><td className="px-6 py-3">{c.email}</td><td className="px-6 py-3">${c.saldo.toFixed(2)}</td></tr>))}</tbody>
             </table>
           </div>
         </div>
       )}
-
       {tab === 'transacciones' && (
         <div className="bg-white bg-opacity-10 rounded-xl overflow-x-auto">
           <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-white border-opacity-20">
-                <th className="px-6 py-3">Emisor</th>
-                <th className="px-6 py-3">Receptor</th>
-                <th className="px-6 py-3">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transacciones.map(tx => (
-                <tr key={tx._id} className="border-b border-white border-opacity-10">
-                  <td className="px-6 py-3">{tx.emisor.nombre}</td>
-                  <td className="px-6 py-3">{tx.receptor.nombre}</td>
-                  <td className="px-6 py-3 text-green-300">${tx.monto.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
+            <thead><tr className="border-b border-white border-opacity-20"><th className="px-6 py-3">Emisor</th><th className="px-6 py-3">Receptor</th><th className="px-6 py-3">Monto</th></tr></thead>
+            <tbody>{transacciones.map(tx => (<tr key={tx._id} className="border-b border-white border-opacity-10"><td className="px-6 py-3">{tx.emisor.nombre}</td><td className="px-6 py-3">{tx.receptor.nombre}</td><td className="px-6 py-3 text-green-300">${tx.monto.toFixed(2)}</td></tr>))}</tbody>
           </table>
         </div>
       )}
-
       {showNuevo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 w-full max-w-md">
