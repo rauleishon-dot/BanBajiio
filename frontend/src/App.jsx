@@ -91,7 +91,7 @@ function LoginScreen({ login }) {
           <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-500 to-red-500 rounded-full flex items-center justify-center mb-4 shadow-lg">
             <Wallet size={40} className="text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">Banbajío</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">Banbajío Pro</h1>
           <p className="text-purple-200">Tu banco digital seguro</p>
         </div>
 
