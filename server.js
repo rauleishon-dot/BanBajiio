@@ -21,12 +21,12 @@ const usuarioSchema = new mongoose.Schema({
   saldo: { type: Number, default: 0 },
   numeroCuenta: { type: String, unique: true },
   tarjetaVirtual: {
-    numero: String, // 16 dígitos
-    cvv: String, // 3 dígitos
+    numero: String,
+    cvv: String,
     nombreTitular: String,
     fechaExpedicion: Date,
-    fechaVencimiento: Date, // 5 años después
-    ultimosDigitos: String // Últimos 4 dígitos
+    fechaVencimiento: Date,
+    ultimosDigitos: String
   },
   rol: { type: String, enum: ['admin', 'cliente'], default: 'cliente' },
   createdAt: { type: Date, default: Date.now }
@@ -43,26 +43,40 @@ const transaccionSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const aclaracionSchema = new mongoose.Schema({
+  transaccionId: mongoose.Schema.Types.ObjectId,
+  clienteId: mongoose.Schema.Types.ObjectId,
+  clienteNombre: String,
+  descripcion: String,
+  estado: { type: String, enum: ['pendiente', 'revisado'], default: 'pendiente' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const configuracionSchema = new mongoose.Schema({
+  telefonoSoporte: { type: String, default: '01-800-000-0000' }
+});
+
 const Usuario = mongoose.model('Usuario', usuarioSchema);
 const Transaccion = mongoose.model('Transaccion', transaccionSchema);
+const Aclaracion = mongoose.model('Aclaracion', aclaracionSchema);
+const Configuracion = mongoose.model('Configuracion', configuracionSchema);
 
 // ===== FUNCIONES HELPERS =====
 function generarNumeroCuenta() {
-  return Math.floor(Math.random() * 9000000000) + 1000000000; // 10 dígitos
+  return Math.floor(Math.random() * 9000000000) + 1000000000;
 }
 
 function generarTarjetaVirtual(nombre) {
-  // Número de tarjeta: 4532 (Visa) + 12 dígitos aleatorios
   const parte1 = '4532';
   const parte2 = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
   const parte3 = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
   const numeroCompleto = parte1 + parte2 + parte3;
-  
-  const cvv = Math.floor(Math.random() * 900) + 100; // 3 dígitos
+
+  const cvv = Math.floor(Math.random() * 900) + 100;
   const fechaExpedicion = new Date();
   const fechaVencimiento = new Date(fechaExpedicion);
   fechaVencimiento.setFullYear(fechaVencimiento.getFullYear() + 5);
-  
+
   return {
     numero: numeroCompleto,
     cvv: cvv.toString(),
@@ -71,12 +85,6 @@ function generarTarjetaVirtual(nombre) {
     fechaVencimiento: fechaVencimiento,
     ultimosDigitos: numeroCompleto.slice(-4)
   };
-}
-
-function formatearFecha(date) {
-  const mes = String(date.getMonth() + 1).padStart(2, '0');
-  const año = date.getFullYear().toString().slice(-2);
-  return `${mes}/${año}`;
 }
 
 function generarToken(usuario) {
@@ -114,7 +122,8 @@ app.post('/api/auth/login', async (req, res) => {
         saldo: usuario.saldo,
         numeroCuenta: usuario.numeroCuenta,
         tarjetaVirtual: usuario.tarjetaVirtual,
-        rol: usuario.rol
+        rol: usuario.rol,
+        createdAt: usuario.createdAt
       }
     });
   } catch (error) {
@@ -179,6 +188,79 @@ app.post('/api/transferencia', middleware, async (req, res) => {
   }
 });
 
+// ===== CONFIGURACIÓN =====
+app.get('/api/configuracion', middleware, async (req, res) => {
+  try {
+    let config = await Configuracion.findOne();
+    if (!config) {
+      config = await Configuracion.create({});
+    }
+    res.json(config);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/configuracion', middleware, async (req, res) => {
+  try {
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    const { telefonoSoporte } = req.body;
+    let config = await Configuracion.findOne();
+    if (!config) {
+      config = await Configuracion.create({ telefonoSoporte });
+    } else {
+      config.telefonoSoporte = telefonoSoporte;
+      await config.save();
+    }
+    res.json({ success: true, config });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== ACLARACIONES =====
+app.post('/api/aclaracion', middleware, async (req, res) => {
+  try {
+    const { transaccionId, descripcion } = req.body;
+    const usuario = await Usuario.findById(req.userId);
+
+    const aclaracion = new Aclaracion({
+      transaccionId,
+      clienteId: req.userId,
+      clienteNombre: usuario.nombre,
+      descripcion
+    });
+
+    await aclaracion.save();
+    res.json({ success: true, aclaracion });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/aclaraciones', middleware, async (req, res) => {
+  try {
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    const aclaraciones = await Aclaracion.find().sort({ createdAt: -1 });
+    res.json(aclaraciones);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/aclaraciones/:id', middleware, async (req, res) => {
+  try {
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    const aclaracion = await Aclaracion.findById(req.params.id);
+    if (!aclaracion) return res.status(404).json({ error: 'No encontrada' });
+    aclaracion.estado = 'revisado';
+    await aclaracion.save();
+    res.json({ success: true, aclaracion });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===== RUTAS ADMIN =====
 app.post('/api/admin/clientes', middleware, async (req, res) => {
   try {
@@ -226,7 +308,6 @@ app.get('/api/admin/clientes', middleware, async (req, res) => {
   }
 });
 
-// ADMIN: Editar número de cuenta
 app.put('/api/admin/clientes/:id/numeroCuenta', middleware, async (req, res) => {
   try {
     if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
@@ -236,7 +317,6 @@ app.put('/api/admin/clientes/:id/numeroCuenta', middleware, async (req, res) => 
 
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-    // Verificar que no exista otro con ese número
     const existente = await Usuario.findOne({ numeroCuenta: nuevoCuenta });
     if (existente && existente._id.toString() !== req.params.id) {
       return res.status(400).json({ error: 'Número de cuenta ya existe' });
@@ -251,7 +331,6 @@ app.put('/api/admin/clientes/:id/numeroCuenta', middleware, async (req, res) => 
   }
 });
 
-// ADMIN: Editar cliente
 app.put('/api/admin/clientes/:id', middleware, async (req, res) => {
   try {
     if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
@@ -277,7 +356,6 @@ app.put('/api/admin/clientes/:id', middleware, async (req, res) => {
   }
 });
 
-// ADMIN: Eliminar cliente
 app.delete('/api/admin/clientes/:id', middleware, async (req, res) => {
   try {
     if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
@@ -292,7 +370,6 @@ app.delete('/api/admin/clientes/:id', middleware, async (req, res) => {
   }
 });
 
-// ADMIN: Depositar dinero
 app.post('/api/admin/deposito', middleware, async (req, res) => {
   try {
     if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
@@ -323,7 +400,6 @@ app.post('/api/admin/deposito', middleware, async (req, res) => {
   }
 });
 
-// ADMIN: Transferencia entre clientes
 app.post('/api/admin/transferencia', middleware, async (req, res) => {
   try {
     if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
