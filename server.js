@@ -1,169 +1,179 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
 
-// Middleware
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
-// MongoDB Connection
 const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/banbajio';
-mongoose.connect(mongoUri).catch(err => console.log('MongoDB connection error:', err));
+mongoose.connect(mongoUri).then(() => console.log('✅ MongoDB conectado')).catch(err => console.error('❌ Error MongoDB:', err));
 
-// ============ SCHEMAS ============
-
-// Usuario Schema (Admin y Clientes)
+// ===== SCHEMAS =====
 const usuarioSchema = new mongoose.Schema({
-  nombre: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  contraseña: { type: String, required: true },
-  telefono: String,
-  rol: { type: String, enum: ['admin', 'cliente'], default: 'cliente' },
+  nombre: String,
+  email: { type: String, unique: true },
+  contraseña: String,
   saldo: { type: Number, default: 0 },
-  numeroTarjeta: { type: String, unique: true, sparse: true },
-  activo: { type: Boolean, default: true },
+  numeroCuenta: { type: String, unique: true }, // Ej: 1234567890
+  tarjetaVirtual: String, // Ej: 4532****1234
+  rol: { type: String, enum: ['admin', 'cliente'], default: 'cliente' },
   createdAt: { type: Date, default: Date.now }
 });
 
-// Hash contraseña antes de guardar
-usuarioSchema.pre('save', async function(next) {
-  if (!this.isModified('contraseña')) return next();
-  this.contraseña = await bcrypt.hash(this.contraseña, 10);
-  next();
-});
-
-// Método para comparar contraseñas
-usuarioSchema.methods.compararContraseña = async function(contraseñaIngresada) {
-  return await bcrypt.compare(contraseñaIngresada, this.contraseña);
-};
-
-// Transacción Schema
 const transaccionSchema = new mongoose.Schema({
-  emisor: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
-  receptor: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
-  monto: { type: Number, required: true },
+  emisorId: mongoose.Schema.Types.ObjectId,
+  emisor: { nombre: String, numeroCuenta: String },
+  receptorNumeroCuenta: String, // Número de cuenta (puede no estar registrado)
+  receptorNombre: String,
+  monto: Number,
   descripcion: String,
-  estado: { type: String, enum: ['pendiente', 'completada', 'fallida'], default: 'completada' },
+  estado: { type: String, enum: ['pendiente', 'completada'], default: 'pendiente' },
   createdAt: { type: Date, default: Date.now }
 });
 
 const Usuario = mongoose.model('Usuario', usuarioSchema);
 const Transaccion = mongoose.model('Transaccion', transaccionSchema);
 
-// ============ MIDDLEWARE DE AUTENTICACIÓN ============
+// ===== FUNCIONES HELPERS =====
+function generarNumeroCuenta() {
+  return Math.floor(Math.random() * 9000000000) + 1000000000; // 10 dígitos
+}
 
-const verificarToken = (req, res, next) => {
+function generarTarjetaVirtual() {
+  const ultimosDigitos = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `4532****${ultimosDigitos}`;
+}
+
+function generarToken(usuario) {
+  return jwt.sign({ id: usuario._id, rol: usuario.rol }, process.env.JWT_SECRET || 'secreto_banbajio', { expiresIn: '7d' });
+}
+
+function middleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ error: 'Token no proporcionado' });
-  }
-
+  if (!token) return res.status(401).json({ error: 'Token no proporcionado' });
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secreto_banbajio_123');
-    req.usuarioId = decoded.id;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secreto_banbajio');
+    req.userId = decoded.id;
     req.rol = decoded.rol;
     next();
   } catch (error) {
     res.status(401).json({ error: 'Token inválido' });
   }
-};
+}
 
-const esAdmin = (req, res, next) => {
-  if (req.rol !== 'admin') {
-    return res.status(403).json({ error: 'Acceso denegado. Solo administradores' });
-  }
-  next();
-};
-
-// ============ RUTAS DE AUTENTICACIÓN ============
-
-// Registro/Login
+// ===== RUTAS PÚBLICAS =====
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, contraseña } = req.body;
-
     const usuario = await Usuario.findOne({ email });
-    if (!usuario) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+    if (!usuario || !await bcrypt.compare(contraseña, usuario.contraseña)) {
+      return res.status(401).json({ error: 'Email o contraseña incorrectos' });
     }
-
-    const esValida = await usuario.compararContraseña(contraseña);
-    if (!esValida) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
-    }
-
-    if (!usuario.activo) {
-      return res.status(401).json({ error: 'Usuario inactivo' });
-    }
-
-    const token = jwt.sign(
-      { id: usuario._id, rol: usuario.rol, email: usuario.email },
-      process.env.JWT_SECRET || 'secreto_banbajio_123',
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      token,
-      usuario: {
-        id: usuario._id,
-        nombre: usuario.nombre,
-        email: usuario.email,
-        rol: usuario.rol,
-        saldo: usuario.saldo,
-        numeroTarjeta: usuario.numeroTarjeta
-      }
-    });
+    const token = generarToken(usuario);
+    res.json({ token, usuario: { _id: usuario._id, nombre: usuario.nombre, email: usuario.email, saldo: usuario.saldo, numeroCuenta: usuario.numeroCuenta, tarjetaVirtual: usuario.tarjetaVirtual, rol: usuario.rol } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// ============ RUTAS DE ADMIN ============
-
-// Crear cliente
-app.post('/api/admin/clientes', verificarToken, esAdmin, async (req, res) => {
+// ===== RUTAS PROTEGIDAS =====
+app.get('/api/perfil', middleware, async (req, res) => {
   try {
-    const { nombre, email, contraseña, telefono, saldoInicial } = req.body;
+    const usuario = await Usuario.findById(req.userId).select('-contraseña');
+    res.json(usuario);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-    // Generar número de tarjeta único
-    const numeroTarjeta = 'BANJ' + Math.random().toString(36).substr(2, 12).toUpperCase();
+// CLIENTE: Ver mis transacciones
+app.get('/api/mis-transacciones', middleware, async (req, res) => {
+  try {
+    const transacciones = await Transaccion.find({ emisorId: req.userId }).sort({ createdAt: -1 });
+    res.json(transacciones);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-    const nuevoUsuario = new Usuario({
+// CLIENTE: Transferencia a número de cuenta (sin registro previo)
+app.post('/api/transferencia', middleware, async (req, res) => {
+  try {
+    const { receptorNumeroCuenta, monto, descripcion } = req.body;
+    const emisor = await Usuario.findById(req.userId);
+
+    if (emisor.saldo < monto) {
+      return res.status(400).json({ error: 'Saldo insuficiente' });
+    }
+
+    // Buscar si el número de cuenta existe
+    const receptor = await Usuario.findOne({ numeroCuenta: receptorNumeroCuenta });
+    const receptorNombre = receptor ? receptor.nombre : 'Cuenta Externa';
+
+    // Crear transacción pendiente
+    const transaccion = new Transaccion({
+      emisorId: req.userId,
+      emisor: { nombre: emisor.nombre, numeroCuenta: emisor.numeroCuenta },
+      receptorNumeroCuenta,
+      receptorNombre,
+      monto,
+      descripcion: descripcion || '',
+      estado: 'pendiente'
+    });
+
+    await transaccion.save();
+
+    // Restar del emisor
+    emisor.saldo -= monto;
+    await emisor.save();
+
+    // Si el receptor existe, sumar
+    if (receptor) {
+      receptor.saldo += monto;
+      await receptor.save();
+    }
+
+    res.json({ success: true, transaccion });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== RUTAS ADMIN =====
+app.post('/api/admin/clientes', middleware, async (req, res) => {
+  try {
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+
+    const { nombre, email, contraseña, saldoInicial } = req.body;
+    const hashedPassword = await bcrypt.hash(contraseña, 10);
+    const numeroCuenta = generarNumeroCuenta().toString();
+    const tarjetaVirtual = generarTarjetaVirtual();
+
+    const usuario = new Usuario({
       nombre,
       email,
-      contraseña,
-      telefono,
-      rol: 'cliente',
+      contraseña: hashedPassword,
       saldo: saldoInicial || 0,
-      numeroTarjeta
+      numeroCuenta,
+      tarjetaVirtual,
+      rol: 'cliente'
     });
 
-    await nuevoUsuario.save();
-
-    res.json({
-      mensaje: 'Cliente creado exitosamente',
-      usuario: {
-        id: nuevoUsuario._id,
-        nombre: nuevoUsuario.nombre,
-        email: nuevoUsuario.email,
-        numeroTarjeta: nuevoUsuario.numeroTarjeta,
-        saldo: nuevoUsuario.saldo
-      }
-    });
+    await usuario.save();
+    res.json({ success: true, usuario: { _id: usuario._id, nombre, email, saldo: usuario.saldo, numeroCuenta, tarjetaVirtual } });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Listar todos los clientes
-app.get('/api/admin/clientes', verificarToken, esAdmin, async (req, res) => {
+app.get('/api/admin/clientes', middleware, async (req, res) => {
   try {
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
     const clientes = await Usuario.find({ rol: 'cliente' }).select('-contraseña');
     res.json(clientes);
   } catch (error) {
@@ -171,200 +181,105 @@ app.get('/api/admin/clientes', verificarToken, esAdmin, async (req, res) => {
   }
 });
 
-// Actualizar saldo de cliente
-app.put('/api/admin/clientes/:id/saldo', verificarToken, esAdmin, async (req, res) => {
+// ADMIN: Depositar dinero en cliente
+app.post('/api/admin/deposito', middleware, async (req, res) => {
   try {
-    const { saldo } = req.body;
-    const usuario = await Usuario.findByIdAndUpdate(
-      req.params.id,
-      { saldo },
-      { new: true }
-    ).select('-contraseña');
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
 
-    res.json({ mensaje: 'Saldo actualizado', usuario });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    const { clienteId, monto, descripcion } = req.body;
+    const cliente = await Usuario.findById(clienteId);
 
-// Desactivar cliente
-app.put('/api/admin/clientes/:id/desactivar', verificarToken, esAdmin, async (req, res) => {
-  try {
-    const usuario = await Usuario.findByIdAndUpdate(
-      req.params.id,
-      { activo: false },
-      { new: true }
-    ).select('-contraseña');
+    if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-    res.json({ mensaje: 'Cliente desactivado', usuario });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    cliente.saldo += monto;
+    await cliente.save();
 
-// Ver todas las transacciones
-app.get('/api/admin/transacciones', verificarToken, esAdmin, async (req, res) => {
-  try {
-    const transacciones = await Transaccion.find()
-      .populate('emisor', 'nombre email')
-      .populate('receptor', 'nombre email')
-      .sort({ createdAt: -1 });
-
-    res.json(transacciones);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Dashboard stats
-app.get('/api/admin/stats', verificarToken, esAdmin, async (req, res) => {
-  try {
-    const totalClientes = await Usuario.countDocuments({ rol: 'cliente' });
-    const totalTransacciones = await Transaccion.countDocuments();
-    const saldoTotal = await Usuario.aggregate([
-      { $match: { rol: 'cliente' } },
-      { $group: { _id: null, total: { $sum: '$saldo' } } }
-    ]);
-
-    res.json({
-      totalClientes,
-      totalTransacciones,
-      saldoTotal: saldoTotal[0]?.total || 0
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============ RUTAS DE CLIENTE ============
-
-// Obtener datos del usuario
-app.get('/api/perfil', verificarToken, async (req, res) => {
-  try {
-    const usuario = await Usuario.findById(req.usuarioId).select('-contraseña');
-    res.json(usuario);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Realizar transferencia
-app.post('/api/transferencia', verificarToken, async (req, res) => {
-  try {
-    const { receptorId, monto, descripcion } = req.body;
-
-    // Validaciones
-    if (monto <= 0) {
-      return res.status(400).json({ error: 'Monto debe ser mayor a 0' });
-    }
-
-    if (monto > 10000) {
-      return res.status(400).json({ error: 'Límite máximo de $10,000 por transferencia' });
-    }
-
-    const emisor = await Usuario.findById(req.usuarioId);
-    if (!emisor || emisor.saldo < monto) {
-      return res.status(400).json({ error: 'Fondos insuficientes' });
-    }
-
-    const receptor = await Usuario.findById(receptorId);
-    if (!receptor) {
-      return res.status(404).json({ error: 'Receptor no encontrado' });
-    }
-
-    // Procesar transferencia
-    emisor.saldo -= monto;
-    receptor.saldo += monto;
-
+    // Registrar como transacción
     const transaccion = new Transaccion({
-      emisor: req.usuarioId,
-      receptor: receptorId,
+      emisorId: null,
+      emisor: { nombre: 'Depósito Admin', numeroCuenta: 'ADMIN' },
+      receptorNumeroCuenta: cliente.numeroCuenta,
+      receptorNombre: cliente.nombre,
       monto,
-      descripcion,
+      descripcion: descripcion || 'Depósito del administrador',
       estado: 'completada'
     });
 
-    await emisor.save();
-    await receptor.save();
     await transaccion.save();
 
-    res.json({
-      mensaje: 'Transferencia exitosa',
-      transaccion: {
-        id: transaccion._id,
-        monto: transaccion.monto,
-        receptor: receptor.nombre,
-        fecha: transaccion.createdAt
-      },
-      nuevoSaldo: emisor.saldo
-    });
+    res.json({ success: true, cliente });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Obtener transacciones del usuario
-app.get('/api/mis-transacciones', verificarToken, async (req, res) => {
+// ADMIN: Hacer transferencia entre clientes
+app.post('/api/admin/transferencia', middleware, async (req, res) => {
   try {
-    const transacciones = await Transaccion.find({
-      $or: [
-        { emisor: req.usuarioId },
-        { receptor: req.usuarioId }
-      ]
-    })
-      .populate('emisor', 'nombre email')
-      .populate('receptor', 'nombre email')
-      .sort({ createdAt: -1 });
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
 
+    const { emisorId, receptorId, monto, descripcion } = req.body;
+    const emisor = await Usuario.findById(emisorId);
+    const receptor = await Usuario.findById(receptorId);
+
+    if (!emisor || !receptor) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (emisor.saldo < monto) return res.status(400).json({ error: 'Saldo insuficiente' });
+
+    // Restar y sumar
+    emisor.saldo -= monto;
+    receptor.saldo += monto;
+    await emisor.save();
+    await receptor.save();
+
+    // Registrar transacción
+    const transaccion = new Transaccion({
+      emisorId,
+      emisor: { nombre: emisor.nombre, numeroCuenta: emisor.numeroCuenta },
+      receptorNumeroCuenta: receptor.numeroCuenta,
+      receptorNombre: receptor.nombre,
+      monto,
+      descripcion: descripcion || 'Transferencia del administrador',
+      estado: 'completada'
+    });
+
+    await transaccion.save();
+
+    res.json({ success: true, transaccion });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ADMIN: Ver todas las transacciones
+app.get('/api/admin/transacciones', middleware, async (req, res) => {
+  try {
+    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    const transacciones = await Transaccion.find().sort({ createdAt: -1 });
     res.json(transacciones);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Listar otros usuarios (para transferencias)
-app.get('/api/usuarios', verificarToken, async (req, res) => {
-  try {
-    const usuarios = await Usuario.find({
-      _id: { $ne: req.usuarioId },
-      rol: 'cliente'
-    }).select('nombre email numeroTarjeta');
-
-    res.json(usuarios);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+// ===== ADMIN POR DEFECTO =====
+async function crearAdminPorDefecto() {
+  const adminExiste = await Usuario.findOne({ email: 'admin@banbajio.com' });
+  if (!adminExiste) {
+    const hashedPassword = await bcrypt.hash('Admin123!', 10);
+    await Usuario.create({
+      nombre: 'Administrador',
+      email: 'admin@banbajio.com',
+      contraseña: hashedPassword,
+      saldo: 0,
+      numeroCuenta: '0000000000',
+      tarjetaVirtual: '0000****0000',
+      rol: 'admin'
+    });
+    console.log('✅ Admin creado');
   }
-});
+}
 
-// ============ CREAR ADMIN POR DEFECTO ============
-
-const crearAdminPorDefecto = async () => {
-  try {
-    const adminExiste = await Usuario.findOne({ rol: 'admin' });
-    if (!adminExiste) {
-      const admin = new Usuario({
-        nombre: 'Administrador',
-        email: 'admin@banbajio.com',
-        contraseña: 'Admin123!',
-        rol: 'admin'
-      });
-      await admin.save();
-      console.log('✅ Admin creado: admin@banbajio.com / Admin123!');
-    }
-  } catch (error) {
-    console.log('Error creando admin:', error.message);
-  }
-};
-
-// ============ INICIAR SERVIDOR ============
+crearAdminPorDefecto();
 
 const PORT = process.env.PORT || 5000;
-
-mongoose.connection.once('open', () => {
-  console.log('✅ MongoDB conectado');
-  crearAdminPorDefecto();
-  
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  });
-});
+app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));
