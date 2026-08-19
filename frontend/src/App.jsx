@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, LogOut, Send, Plus, CreditCard, Menu, X, ArrowUpRight, ArrowDownLeft, Wallet, Copy, Check } from 'lucide-react';
+import { Eye, EyeOff, LogOut, Send, Plus, CreditCard, Menu, X, ArrowUpRight, ArrowDownLeft, Wallet, Copy, Check, Edit, Trash2 } from 'lucide-react';
 
 const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-// ===== FUNCIÓN PARA FORMATEAR NÚMEROS =====
 function formatearDinero(cantidad) {
   return '$' + cantidad.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -153,6 +152,7 @@ function LoginScreen({ login }) {
 // ============ CLIENTE DASHBOARD ============
 function ClienteDashboard({ usuario, logout, token }) {
   const [showBalance, setShowBalance] = useState(false);
+  const [showCVV, setShowCVV] = useState(false);
   const [transacciones, setTransacciones] = useState([]);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -180,11 +180,10 @@ function ClienteDashboard({ usuario, logout, token }) {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000); // Actualizar cada 5s
+    const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Cambiar "pendiente" a "completada" después de 30 minutos
   useEffect(() => {
     const timer = setInterval(() => {
       setTransacciones(prev => prev.map(tx => {
@@ -267,6 +266,16 @@ function ClienteDashboard({ usuario, logout, token }) {
     return '✅ Completada';
   };
 
+  const formatearNumeroTarjeta = (numero) => {
+    return numero.slice(0, 4) + ' ' + numero.slice(4, 8) + ' ' + numero.slice(8, 12) + ' ' + numero.slice(12, 16);
+  };
+
+  const formatearFecha = (date) => {
+    const mes = String(date.getMonth() + 1).padStart(2, '0');
+    const año = date.getFullYear().toString().slice(-2);
+    return `${mes}/${año}`;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-gray-50 pb-24">
       {/* Header */}
@@ -289,10 +298,10 @@ function ClienteDashboard({ usuario, logout, token }) {
           </div>
         )}
 
-        {/* Tarjeta */}
-        <div className="bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-md border border-white/30 rounded-2xl p-6 text-white">
+        {/* Saldo */}
+        <div className="bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-md border border-white/30 rounded-2xl p-6 text-white mb-6">
           <p className="text-white/70 text-sm mb-2">SALDO DISPONIBLE</p>
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between">
             <h2 className="text-4xl font-bold">
               {showBalance ? formatearDinero(usuario.saldo) : '••••••'}
             </h2>
@@ -300,16 +309,39 @@ function ClienteDashboard({ usuario, logout, token }) {
               {showBalance ? <Eye size={24} /> : <EyeOff size={24} />}
             </button>
           </div>
+        </div>
 
-          {/* Número de Cuenta y Tarjeta */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/10 rounded-lg p-3">
-              <p className="text-white/60 text-xs">Número de Cuenta</p>
-              <p className="text-white font-mono text-sm mt-1">{usuario.numeroCuenta}</p>
+        {/* TARJETA VIRTUAL REAL */}
+        <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-2xl transform perspective">
+          <div className="flex justify-between items-start mb-12">
+            <div>
+              <p className="text-blue-100 text-sm mb-2">Tarjeta Virtual</p>
+              <p className="text-white font-mono text-2xl tracking-wider">{formatearNumeroTarjeta(usuario.tarjetaVirtual.numero)}</p>
             </div>
-            <div className="bg-white/10 rounded-lg p-3">
-              <p className="text-white/60 text-xs">Tarjeta Virtual</p>
-              <p className="text-white font-mono text-sm mt-1">{usuario.tarjetaVirtual}</p>
+            <CreditCard size={40} className="text-blue-100" />
+          </div>
+
+          <div className="flex justify-between items-end">
+            <div>
+              <p className="text-blue-100 text-xs mb-1">Titular</p>
+              <p className="text-white font-semibold text-sm">{usuario.tarjetaVirtual.nombreTitular}</p>
+            </div>
+            <div className="text-right">
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-blue-100 text-xs mb-1">Vencimiento</p>
+                  <p className="text-white font-mono text-sm">{formatearFecha(new Date(usuario.tarjetaVirtual.fechaVencimiento))}</p>
+                </div>
+                <div>
+                  <p className="text-blue-100 text-xs mb-1">CVV</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-white font-mono text-sm">{showCVV ? usuario.tarjetaVirtual.cvv : '***'}</p>
+                    <button onClick={() => setShowCVV(!showCVV)} className="text-blue-100 hover:text-white">
+                      {showCVV ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -335,15 +367,11 @@ function ClienteDashboard({ usuario, logout, token }) {
             <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
               <div>
                 <p className="text-sm text-gray-600">Número de Cuenta</p>
-                <p className="font-mono font-bold text-gray-900">{usuario.numeroCuenta}</p>
+                <p className="font-mono font-bold text-gray-900 text-lg">{usuario.numeroCuenta}</p>
               </div>
               <button onClick={copiarCuenta} className="p-2 hover:bg-purple-100 rounded-lg transition">
                 {copied ? <Check size={20} className="text-green-600" /> : <Copy size={20} className="text-purple-600" />}
               </button>
-            </div>
-            <div className="p-3 bg-red-50 rounded-lg">
-              <p className="text-sm text-gray-600">Tarjeta Virtual</p>
-              <p className="font-mono font-bold text-gray-900">{usuario.tarjetaVirtual}</p>
             </div>
           </div>
         </div>
@@ -445,10 +473,13 @@ function AdminDashboard({ usuario, logout, token }) {
   const [transacciones, setTransacciones] = useState([]);
   const [showNuevo, setShowNuevo] = useState(false);
   const [showDeposito, setShowDeposito] = useState(false);
+  const [showEditarCliente, setShowEditarCliente] = useState(false);
+  const [clienteEditando, setClienteEditando] = useState(null);
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [contraseña, setContraseña] = useState('');
   const [saldo, setSaldo] = useState('');
+  const [numeroCuenta, setNumeroCuenta] = useState('');
   const [clienteSelectId, setClienteSelectId] = useState('');
   const [montoDeposito, setMontoDeposito] = useState('');
   const [loading, setLoading] = useState(false);
@@ -492,6 +523,24 @@ function AdminDashboard({ usuario, logout, token }) {
     setMontoDeposito('');
   };
 
+  const abrirEditar = (cliente) => {
+    setClienteEditando(cliente);
+    setNombre(cliente.nombre);
+    setEmail(cliente.email);
+    setSaldo(cliente.saldo.toString());
+    setNumeroCuenta(cliente.numeroCuenta);
+    setShowEditarCliente(true);
+  };
+
+  const resetEditar = () => {
+    setShowEditarCliente(false);
+    setClienteEditando(null);
+    setNombre('');
+    setEmail('');
+    setSaldo('');
+    setNumeroCuenta('');
+  };
+
   const crear = async () => {
     if (!nombre || !email || !contraseña) {
       alert('Completa todos los campos');
@@ -522,6 +571,82 @@ function AdminDashboard({ usuario, logout, token }) {
     }
   };
 
+  const editarCliente = async () => {
+    if (!nombre || !email || saldo === '') {
+      alert('Completa todos los campos');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/admin/clientes/${clienteEditando._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ nombre, email, saldo: parseFloat(saldo) })
+      });
+
+      if (res.ok) {
+        alert('✅ Cliente actualizado');
+        resetEditar();
+        await loadData();
+      } else {
+        alert('Error al actualizar');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const editarNumeroCuenta = async () => {
+    if (!numeroCuenta) {
+      alert('Ingresa el nuevo número de cuenta');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/admin/clientes/${clienteEditando._id}/numeroCuenta`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ nuevoCuenta: numeroCuenta })
+      });
+
+      if (res.ok) {
+        alert('✅ Número de cuenta actualizado');
+        resetEditar();
+        await loadData();
+      } else {
+        alert('Error: Número de cuenta ya existe o inválido');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const eliminarCliente = async (id) => {
+    if (!window.confirm('¿Eliminar este cliente permanentemente?')) return;
+
+    try {
+      const res = await fetch(`${apiUrl}/admin/clientes/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        alert('✅ Cliente eliminado');
+        await loadData();
+      } else {
+        alert('Error al eliminar');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
   const hacerDeposito = async () => {
     if (!clienteSelectId || !montoDeposito) {
       alert('Selecciona cliente y monto');
@@ -548,6 +673,12 @@ function AdminDashboard({ usuario, logout, token }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatearFecha = (date) => {
+    const mes = String(date.getMonth() + 1).padStart(2, '0');
+    const año = date.getFullYear().toString().slice(-2);
+    return `${mes}/${año}`;
   };
 
   return (
@@ -604,12 +735,20 @@ function AdminDashboard({ usuario, logout, token }) {
               {clientes.map(c => (
                 <div key={c._id} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
                   <div className="flex justify-between items-start mb-2">
-                    <div>
+                    <div className="flex-1">
                       <p className="font-bold text-gray-900">{c.nombre}</p>
                       <p className="text-gray-500 text-sm">{c.email}</p>
                       <p className="text-gray-400 text-xs font-mono mt-1">Cuenta: {c.numeroCuenta}</p>
                     </div>
                     <p className="font-bold text-purple-600 text-lg">{formatearDinero(c.saldo)}</p>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => abrirEditar(c)} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition flex items-center justify-center gap-2">
+                      <Edit size={16} /> Editar
+                    </button>
+                    <button onClick={() => eliminarCliente(c._id)} className="flex-1 py-2 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition flex items-center justify-center gap-2">
+                      <Trash2 size={16} /> Eliminar
+                    </button>
                   </div>
                 </div>
               ))}
@@ -696,6 +835,67 @@ function AdminDashboard({ usuario, logout, token }) {
                   className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
                 >
                   {loading ? 'Creando...' : 'Crear'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Cliente */}
+      {showEditarCliente && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-6 text-gray-900">Editar Cliente</h3>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Nombre"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+              />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+              />
+              <input
+                type="number"
+                value={saldo}
+                onChange={(e) => setSaldo(e.target.value)}
+                placeholder="Saldo"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+              />
+              <input
+                type="text"
+                value={numeroCuenta}
+                onChange={(e) => setNumeroCuenta(e.target.value)}
+                placeholder="Número de Cuenta"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+              />
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetEditar}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => editarNumeroCuenta()}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  Actualizar Cuenta
+                </button>
+                <button
+                  onClick={editarCliente}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+                >
+                  Guardar
                 </button>
               </div>
             </div>
