@@ -843,65 +843,95 @@ function AdminDashboard({ usuario, logout, token }) {
       )}
 
       {/* Modal Editar Cliente */}
-      {showEditarCliente && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-          <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
-            <h3 className="text-2xl font-bold mb-6 text-gray-900">Editar Cliente</h3>
-            <div className="space-y-3">
-              <input
-                type="text"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Nombre"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-              />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-              />
-              <input
-                type="number"
-                value={saldo}
-                onChange={(e) => setSaldo(e.target.value)}
-                placeholder="Saldo"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-              />
-              <input
-                type="text"
-                value={numeroCuenta}
-                onChange={(e) => setNumeroCuenta(e.target.value)}
-                placeholder="Número de Cuenta"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-              />
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={resetEditar}
-                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => editarNumeroCuenta()}
-                  disabled={loading}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
-                >
-                  Actualizar Cuenta
-                </button>
-                <button
-                  onClick={editarCliente}
-                  disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
-                >
-                  Guardar
-                </button>
-              </div>
-            </div>
-          </div>
+{showEditarCliente && (
+  <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+    <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+      <h3 className="text-2xl font-bold mb-8 text-gray-900">Editar Cliente: {clienteEditando?.nombre}</h3>
+      
+      <div className="space-y-6">
+        {/* Nombre */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Nombre Completo</label>
+          <input
+            type="text"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Ej: Juan Pérez"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+          />
         </div>
-      )}
+
+        {/* Email */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">✉️ Correo Electrónico</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Ej: juan@email.com"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+          />
+        </div>
+
+        {/* Saldo */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Saldo Actual</label>
+          <input
+            type="number"
+            value={saldo}
+            onChange={(e) => setSaldo(e.target.value)}
+            placeholder="Ej: 5000"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+          />
+        </div>
+
+        {/* Número de Cuenta */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">🏦 Número de Cuenta</label>
+          <input
+            type="text"
+            value={numeroCuenta}
+            onChange={(e) => setNumeroCuenta(e.target.value)}
+            placeholder="Ej: 1234567890"
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50 font-mono"
+          />
+          <p className="text-xs text-gray-500 mt-1">Actual: {clienteEditando?.numeroCuenta}</p>
+        </div>
+
+        {/* Tarjeta Virtual Info */}
+        <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+          <p className="text-sm font-semibold text-blue-900 mb-2">💳 Tarjeta Virtual</p>
+          <p className="text-xs text-blue-700">Número: {clienteEditando?.tarjetaVirtual?.numero?.slice(0, 4)} **** **** {clienteEditando?.tarjetaVirtual?.numero?.slice(-4)}</p>
+          <p className="text-xs text-blue-700">Vencimiento: {clienteEditando?.tarjetaVirtual?.fechaVencimiento ? new Date(clienteEditando.tarjetaVirtual.fechaVencimiento).toLocaleDateString() : 'N/A'}</p>
+        </div>
+
+        {/* Botones */}
+        <div className="flex gap-3 pt-6 border-t-2 border-gray-200">
+          <button
+            onClick={resetEditar}
+            className="flex-1 py-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100 transition"
+          >
+            ❌ Cancelar
+          </button>
+          <button
+            onClick={() => editarNumeroCuenta()}
+            disabled={loading}
+            className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            🏦 Actualizar Cuenta
+          </button>
+          <button
+            onClick={editarCliente}
+            disabled={loading}
+            className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+          >
+            💾 Guardar Cambios
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Modal Depósito */}
       {showDeposito && (
