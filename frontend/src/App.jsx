@@ -10,7 +10,7 @@ function formatearDinero(cantidad) {
 export default function BanbajioApp() {
   const [pantalla, setPantalla] = useState('login');
   const [usuario, setUsuario] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [token, setToken] = useState(null);
 
   useEffect(() => {
     if (token) {
@@ -20,7 +20,8 @@ export default function BanbajioApp() {
 
   const verificarToken = async () => {
     try {
-      const res = await fetch(`${apiUrl}/perfil`, {
+      const token = sessionStorage.getItem('token');
+if (!token) { logout(); return; }
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -37,7 +38,7 @@ export default function BanbajioApp() {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     setToken(null);
     setUsuario(null);
     setPantalla('login');
@@ -52,7 +53,7 @@ export default function BanbajioApp() {
       });
       const data = await res.json();
       if (data.token) {
-        localStorage.setItem('token', data.token);
+        sessionStorage.setItem('token', data.token);
         setToken(data.token);
       } else {
         alert('Error: ' + (data.error || 'No se pudo iniciar sesión'));
@@ -901,7 +902,7 @@ function AdminDashboard({ usuario, logout, token }) {
         {/* Tarjeta Virtual Info */}
         <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
           <p className="text-sm font-semibold text-blue-900 mb-2">💳 Tarjeta Virtual</p>
-          <p className="text-xs text-blue-700">Número: {clienteEditando?.tarjetaVirtual?.numero?.slice(0, 4)} **** **** {clienteEditando?.tarjetaVirtual?.numero?.slice(-4)}</p>
+          <p className="text-xs text-blue-700">Número: {clienteEditando?.tarjetaVirtual?.numero ? `${clienteEditando.tarjetaVirtual.numero.slice(0, 4)} **** **** ${clienteEditando.tarjetaVirtual.numero.slice(-4)}` : 'N/A'}</p>
           <p className="text-xs text-blue-700">Vencimiento: {clienteEditando?.tarjetaVirtual?.fechaVencimiento ? new Date(clienteEditando.tarjetaVirtual.fechaVencimiento).toLocaleDateString() : 'N/A'}</p>
         </div>
 
