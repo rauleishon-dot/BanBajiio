@@ -317,7 +317,7 @@ function ClienteDashboard({ usuario, logout, token }) {
           <div className="flex justify-between items-start mb-12">
             <div>
               <p className="text-blue-100 text-sm mb-2">Tarjeta Virtual</p>
-              <p className="text-white font-mono text-2xl tracking-wider">{formatearNumeroTarjeta(usuario.tarjetaVirtual.numero)}</p>
+              <p className="text-white font-mono text-2xl tracking-wider">{usuario.tarjetaVirtual?.numero ? formatearNumeroTarjeta(usuario.tarjetaVirtual.numero) : '•••• •••• •••• ••••'}</p>
             </div>
             <CreditCard size={40} className="text-blue-100" />
           </div>
