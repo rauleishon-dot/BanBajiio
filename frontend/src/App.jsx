@@ -165,6 +165,8 @@ function ClienteDashboard({ usuario, logout, token }) {
   const [monto, setMonto] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [showTarjeta, setShowTarjeta] = useState(false);
+  const [showCVVModal, setShowCVVModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const loadData = async () => {
@@ -348,16 +350,20 @@ function ClienteDashboard({ usuario, logout, token }) {
         </div>
       </div>
 
-      <div className="px-4 mt-6 grid grid-cols-2 gap-4">
-        <button onClick={() => setShowTransfer(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-          <Send className="text-purple-600" size={28} />
-          <span className="text-sm font-semibold text-gray-700">Transferir</span>
-        </button>
-        <button onClick={() => setShowCuenta(!showCuenta)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-          <CreditCard className="text-red-600" size={28} />
-          <span className="text-sm font-semibold text-gray-700">Mi Cuenta</span>
-        </button>
-      </div>
+     <div className="px-4 mt-6 grid grid-cols-3 gap-4">
+  <button onClick={() => setShowTransfer(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
+    <Send className="text-purple-600" size={28} />
+    <span className="text-sm font-semibold text-gray-700">Transferir</span>
+  </button>
+  <button onClick={() => setShowTarjeta(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
+    <CreditCard className="text-blue-600" size={28} />
+    <span className="text-sm font-semibold text-gray-700">Tarjeta</span>
+  </button>
+  <button onClick={() => setShowCuenta(!showCuenta)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
+    <Wallet className="text-red-600" size={28} />
+    <span className="text-sm font-semibold text-gray-700">Cuenta</span>
+  </button>
+</div>
 
       {showCuenta && (
         <div className="px-4 mt-6 bg-white rounded-xl p-6 shadow">
@@ -459,6 +465,62 @@ function ClienteDashboard({ usuario, logout, token }) {
           </div>
         </div>
       )}
+      
+{/* Modal Tarjeta Virtual */}
+{showTarjeta && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl p-8 w-full max-w-md">
+      <h3 className="text-2xl font-bold mb-6 text-gray-900 text-center">Mi Tarjeta Virtual</h3>
+      
+      <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-2xl mb-6">
+        <div className="flex justify-between items-start mb-12">
+          <div>
+            <p className="text-blue-100 text-sm mb-2">Número de Tarjeta</p>
+            <p className="text-white font-mono text-2xl tracking-wider">{usuario.tarjetaVirtual?.numero ? usuario.tarjetaVirtual.numero.slice(0, 4) + ' ' + usuario.tarjetaVirtual.numero.slice(4, 8) + ' ' + usuario.tarjetaVirtual.numero.slice(8, 12) + ' ' + usuario.tarjetaVirtual.numero.slice(12, 16) : '•••• •••• •••• ••••'}</p>
+          </div>
+          <CreditCard size={40} className="text-blue-100" />
+        </div>
+
+        <div className="flex justify-between items-end">
+          <div>
+            <p className="text-blue-100 text-xs mb-1">Titular</p>
+            <p className="text-white font-semibold text-sm">{usuario.tarjetaVirtual?.nombreTitular || 'N/A'}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-blue-100 text-xs mb-1">Vencimiento</p>
+            <p className="text-white font-mono text-sm">{usuario.tarjetaVirtual?.fechaVencimiento ? `${String(new Date(usuario.tarjetaVirtual.fechaVencimiento).getMonth() + 1).padStart(2, '0')}/${new Date(usuario.tarjetaVirtual.fechaVencimiento).getFullYear().toString().slice(-2)}` : 'N/A'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-4 mb-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-sm text-gray-600 mb-1">Código de Seguridad (CVV)</p>
+            <p className="text-2xl font-bold text-gray-900 font-mono">{showCVVModal ? usuario.tarjetaVirtual?.cvv || '***' : '***'}</p>
+          </div>
+          <button onClick={() => setShowCVVModal(!showCVVModal)} className="p-2 hover:bg-gray-200 rounded-lg transition">
+            {showCVVModal ? <Eye size={24} className="text-gray-700" /> : <EyeOff size={24} className="text-gray-400" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-blue-50 rounded-lg p-3 mb-6 text-xs text-blue-800">
+        <p className="font-semibold mb-1">💡 Información Importante</p>
+        <p>Esta es una tarjeta virtual segura para compras en línea. No la compartas con nadie.</p>
+      </div>
+
+      <div className="flex gap-3">
+        <button onClick={() => setShowTarjeta(false)} className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition">
+          Cerrar
+        </button>
+        <button onClick={() => navigator.clipboard.writeText(usuario.tarjetaVirtual?.numero || '')} className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2">
+          <Copy size={18} /> Copiar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
