@@ -21,22 +21,21 @@ export default function BanbajioApp() {
   const verificarToken = async () => {
     try {
       const token = sessionStorage.getItem('token');
-      if (!token) { logout(); return; }
+      if (!token) {
+        logout();
+        return;
+      }
       const res = await fetch(`${apiUrl}/perfil`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (data._id) {
         setUsuario(data);
+        setToken(token);
         setPantalla(data.rol === 'admin' ? 'adminDashboard' : 'clienteDashboard');
       } else {
         logout();
       }
-    } catch (error) {
-      console.error('Error:', error);
-      logout();
-    }
-  };
     } catch (error) {
       console.error('Error:', error);
       logout();
@@ -76,7 +75,6 @@ export default function BanbajioApp() {
   return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-600">Cargando...</p></div>;
 }
 
-// ============ LOGIN SCREEN ============
 function LoginScreen({ login }) {
   const [email, setEmail] = useState('admin@banbajio.com');
   const [contraseña, setContraseña] = useState('Admin123!');
@@ -156,7 +154,6 @@ function LoginScreen({ login }) {
   );
 }
 
-// ============ CLIENTE DASHBOARD ============
 function ClienteDashboard({ usuario, logout, token }) {
   const [showBalance, setShowBalance] = useState(false);
   const [showCVV, setShowCVV] = useState(false);
@@ -285,7 +282,6 @@ function ClienteDashboard({ usuario, logout, token }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-gray-50 pb-24">
-      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-red-600 text-white p-6 rounded-b-3xl shadow-lg">
         <div className="flex justify-between items-start mb-8">
           <div>
@@ -305,7 +301,6 @@ function ClienteDashboard({ usuario, logout, token }) {
           </div>
         )}
 
-        {/* Saldo */}
         <div className="bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-md border border-white/30 rounded-2xl p-6 text-white mb-6">
           <p className="text-white/70 text-sm mb-2">SALDO DISPONIBLE</p>
           <div className="flex items-center justify-between">
@@ -318,7 +313,6 @@ function ClienteDashboard({ usuario, logout, token }) {
           </div>
         </div>
 
-        {/* TARJETA VIRTUAL REAL */}
         <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-2xl transform perspective">
           <div className="flex justify-between items-start mb-12">
             <div>
@@ -354,7 +348,6 @@ function ClienteDashboard({ usuario, logout, token }) {
         </div>
       </div>
 
-      {/* Acciones Rápidas */}
       <div className="px-4 mt-6 grid grid-cols-2 gap-4">
         <button onClick={() => setShowTransfer(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
           <Send className="text-purple-600" size={28} />
@@ -366,7 +359,6 @@ function ClienteDashboard({ usuario, logout, token }) {
         </button>
       </div>
 
-      {/* Mi Cuenta */}
       {showCuenta && (
         <div className="px-4 mt-6 bg-white rounded-xl p-6 shadow">
           <h3 className="font-bold text-gray-900 mb-4">Información de Cuenta</h3>
@@ -384,7 +376,6 @@ function ClienteDashboard({ usuario, logout, token }) {
         </div>
       )}
 
-      {/* Transacciones */}
       <div className="px-4 mt-8">
         <h3 className="font-bold text-gray-900 mb-4 text-lg">Últimas transacciones</h3>
         {loadingData ? (
@@ -424,7 +415,6 @@ function ClienteDashboard({ usuario, logout, token }) {
         )}
       </div>
 
-      {/* Modal Transferencia */}
       {showTransfer && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
@@ -473,7 +463,6 @@ function ClienteDashboard({ usuario, logout, token }) {
   );
 }
 
-// ============ ADMIN DASHBOARD ============
 function AdminDashboard({ usuario, logout, token }) {
   const [tab, setTab] = useState('clientes');
   const [clientes, setClientes] = useState([]);
@@ -682,15 +671,8 @@ function AdminDashboard({ usuario, logout, token }) {
     }
   };
 
-  const formatearFecha = (date) => {
-    const mes = String(date.getMonth() + 1).padStart(2, '0');
-    const año = date.getFullYear().toString().slice(-2);
-    return `${mes}/${año}`;
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-gray-50 pb-12">
-      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-red-600 text-white p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Panel Admin</h1>
@@ -701,7 +683,6 @@ function AdminDashboard({ usuario, logout, token }) {
         <p className="text-white/80">Bienvenido, {usuario.nombre}</p>
       </div>
 
-      {/* Tabs */}
       <div className="px-4 mt-6 flex gap-2">
         <button
           onClick={() => setTab('clientes')}
@@ -717,7 +698,6 @@ function AdminDashboard({ usuario, logout, token }) {
         </button>
       </div>
 
-      {/* Content */}
       {tab === 'clientes' && (
         <div className="p-4">
           <div className="flex gap-2 mb-6">
@@ -795,7 +775,6 @@ function AdminDashboard({ usuario, logout, token }) {
         </div>
       )}
 
-      {/* Modal Crear Cliente */}
       {showNuevo && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
@@ -849,98 +828,90 @@ function AdminDashboard({ usuario, logout, token }) {
         </div>
       )}
 
-      {/* Modal Editar Cliente */}
-{showEditarCliente && (
-  <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-    <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
-      <h3 className="text-2xl font-bold mb-8 text-gray-900">Editar Cliente: {clienteEditando?.nombre}</h3>
-      
-      <div className="space-y-6">
-        {/* Nombre */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Nombre Completo</label>
-          <input
-            type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Ej: Juan Pérez"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
-          />
-        </div>
+      {showEditarCliente && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-8 text-gray-900">Editar Cliente: {clienteEditando?.nombre}</h3>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Nombre Completo</label>
+                <input
+                  type="text"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Ej: Juan Pérez"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+                />
+              </div>
 
-        {/* Email */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">✉️ Correo Electrónico</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Ej: juan@email.com"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
-          />
-        </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">✉️ Correo Electrónico</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Ej: juan@email.com"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+                />
+              </div>
 
-        {/* Saldo */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Saldo Actual</label>
-          <input
-            type="number"
-            value={saldo}
-            onChange={(e) => setSaldo(e.target.value)}
-            placeholder="Ej: 5000"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
-          />
-        </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Saldo Actual</label>
+                <input
+                  type="number"
+                  value={saldo}
+                  onChange={(e) => setSaldo(e.target.value)}
+                  placeholder="Ej: 5000"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+                />
+              </div>
 
-        {/* Número de Cuenta */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">🏦 Número de Cuenta</label>
-          <input
-            type="text"
-            value={numeroCuenta}
-            onChange={(e) => setNumeroCuenta(e.target.value)}
-            placeholder="Ej: 1234567890"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50 font-mono"
-          />
-          <p className="text-xs text-gray-500 mt-1">Actual: {clienteEditando?.numeroCuenta}</p>
-        </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">🏦 Número de Cuenta</label>
+                <input
+                  type="text"
+                  value={numeroCuenta}
+                  onChange={(e) => setNumeroCuenta(e.target.value)}
+                  placeholder="Ej: 1234567890"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50 font-mono"
+                />
+                <p className="text-xs text-gray-500 mt-1">Actual: {clienteEditando?.numeroCuenta}</p>
+              </div>
 
-        {/* Tarjeta Virtual Info */}
-        <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
-          <p className="text-sm font-semibold text-blue-900 mb-2">💳 Tarjeta Virtual</p>
-          <p className="text-xs text-blue-700">Número: {clienteEditando?.tarjetaVirtual?.numero ? `${clienteEditando.tarjetaVirtual.numero.slice(0, 4)} **** **** ${clienteEditando.tarjetaVirtual.numero.slice(-4)}` : 'N/A'}</p>
-          <p className="text-xs text-blue-700">Vencimiento: {clienteEditando?.tarjetaVirtual?.fechaVencimiento ? new Date(clienteEditando.tarjetaVirtual.fechaVencimiento).toLocaleDateString() : 'N/A'}</p>
-        </div>
+              <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                <p className="text-sm font-semibold text-blue-900 mb-2">💳 Tarjeta Virtual</p>
+                <p className="text-xs text-blue-700">Número: {clienteEditando?.tarjetaVirtual?.numero ? `${clienteEditando.tarjetaVirtual.numero.slice(0, 4)} **** **** ${clienteEditando.tarjetaVirtual.numero.slice(-4)}` : 'N/A'}</p>
+                <p className="text-xs text-blue-700">Vencimiento: {clienteEditando?.tarjetaVirtual?.fechaVencimiento ? new Date(clienteEditando.tarjetaVirtual.fechaVencimiento).toLocaleDateString() : 'N/A'}</p>
+              </div>
 
-        {/* Botones */}
-        <div className="flex gap-3 pt-6 border-t-2 border-gray-200">
-          <button
-            onClick={resetEditar}
-            className="flex-1 py-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100 transition"
-          >
-            ❌ Cancelar
-          </button>
-          <button
-            onClick={() => editarNumeroCuenta()}
-            disabled={loading}
-            className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
-          >
-            🏦 Actualizar Cuenta
-          </button>
-          <button
-            onClick={editarCliente}
-            disabled={loading}
-            className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
-          >
-            💾 Guardar Cambios
-          </button>
+              <div className="flex gap-3 pt-6 border-t-2 border-gray-200">
+                <button
+                  onClick={resetEditar}
+                  className="flex-1 py-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  ❌ Cancelar
+                </button>
+                <button
+                  onClick={() => editarNumeroCuenta()}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  🏦 Actualizar Cuenta
+                </button>
+                <button
+                  onClick={editarCliente}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+                >
+                  💾 Guardar Cambios
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
-      {/* Modal Depósito */}
       {showDeposito && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
