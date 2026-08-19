@@ -21,7 +21,8 @@ export default function BanbajioApp() {
   const verificarToken = async () => {
     try {
       const token = sessionStorage.getItem('token');
-if (!token) { logout(); return; }
+      if (!token) { logout(); return; }
+      const res = await fetch(`${apiUrl}/perfil`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -31,6 +32,11 @@ if (!token) { logout(); return; }
       } else {
         logout();
       }
+    } catch (error) {
+      console.error('Error:', error);
+      logout();
+    }
+  };
     } catch (error) {
       console.error('Error:', error);
       logout();
