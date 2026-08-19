@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, LogOut, Send, Plus, CreditCard, Menu, X, ArrowUpRight, ArrowDownLeft, Wallet, Copy, Check, Edit, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, LogOut, Send, Plus, CreditCard, Menu, X, ArrowUpRight, ArrowDownLeft, Wallet, Copy, Check, Edit, Trash2, FileText, Phone, AlertCircle, Settings, ChevronRight } from 'lucide-react';
 
 const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 function formatearDinero(cantidad) {
   return '$' + cantidad.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function formatearFechaCorta(date) {
+  return new Date(date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function BanbajioApp() {
@@ -13,25 +17,20 @@ export default function BanbajioApp() {
   const [token, setToken] = useState(null);
 
   useEffect(() => {
-    if (token) {
-      verificarToken();
-    }
-  }, [token]);
+    verificarToken();
+  }, []);
 
   const verificarToken = async () => {
     try {
-      const token = sessionStorage.getItem('token');
-      if (!token) {
-        logout();
-        return;
-      }
+      const t = sessionStorage.getItem('token');
+      if (!t) return;
       const res = await fetch(`${apiUrl}/perfil`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${t}` }
       });
       const data = await res.json();
       if (data._id) {
         setUsuario(data);
-        setToken(token);
+        setToken(t);
         setPantalla(data.rol === 'admin' ? 'adminDashboard' : 'clienteDashboard');
       } else {
         logout();
@@ -60,6 +59,8 @@ export default function BanbajioApp() {
       if (data.token) {
         sessionStorage.setItem('token', data.token);
         setToken(data.token);
+        setUsuario(data.usuario);
+        setPantalla(data.usuario.rol === 'admin' ? 'adminDashboard' : 'clienteDashboard');
       } else {
         alert('Error: ' + (data.error || 'No se pudo iniciar sesión'));
       }
@@ -71,10 +72,11 @@ export default function BanbajioApp() {
   if (pantalla === 'login') return <LoginScreen login={login} />;
   if (pantalla === 'clienteDashboard' && usuario) return <ClienteDashboard usuario={usuario} logout={logout} token={token} />;
   if (pantalla === 'adminDashboard' && usuario) return <AdminDashboard usuario={usuario} logout={logout} token={token} />;
-  
+
   return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-600">Cargando...</p></div>;
 }
 
+// ============ LOGIN SCREEN ============
 function LoginScreen({ login }) {
   const [email, setEmail] = useState('admin@banbajio.com');
   const [contraseña, setContraseña] = useState('Admin123!');
@@ -154,20 +156,28 @@ function LoginScreen({ login }) {
   );
 }
 
+// ============ CLIENTE DASHBOARD ============
 function ClienteDashboard({ usuario, logout, token }) {
   const [showBalance, setShowBalance] = useState(false);
-  const [showCVV, setShowCVV] = useState(false);
+  const [showCVVModal, setShowCVVModal] = useState(false);
   const [transacciones, setTransacciones] = useState([]);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showCuenta, setShowCuenta] = useState(false);
+  const [showTarjeta, setShowTarjeta] = useState(false);
+  const [showEstadoCuenta, setShowEstadoCuenta] = useState(false);
+  const [showAclaracion, setShowAclaracion] = useState(false);
+  const [txSeleccionada, setTxSeleccionada] = useState(null);
+  const [descripcionAclaracion, setDescripcionAclaracion] = useState('');
+  const [telefonoSoporte, setTelefonoSoporte] = useState('01-800-000-0000');
   const [numeroCuentaDestino, setNumeroCuentaDestino] = useState('');
   const [monto, setMonto] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
-  const [showTarjeta, setShowTarjeta] = useState(false);
-  const [showCVVModal, setShowCVVModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showCreditoModal, setShowCreditoModal] = useState(false);
+  const [creditoProcesando, setCreditoProcesando] = useState(false);
+  const [creditoNombre, setCreditoNombre] = useState('');
 
   const loadData = async () => {
     setLoadingData(true);
@@ -184,8 +194,21 @@ function ClienteDashboard({ usuario, logout, token }) {
     }
   };
 
+  const loadConfig = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/configuracion`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.telefonoSoporte) setTelefonoSoporte(data.telefonoSoporte);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadConfig();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -222,12 +245,10 @@ function ClienteDashboard({ usuario, logout, token }) {
       alert('Ingresa número de cuenta y monto');
       return;
     }
-
     if (parseFloat(monto) <= 0) {
       alert('El monto debe ser mayor a 0');
       return;
     }
-
     if (numeroCuentaDestino === usuario.numeroCuenta) {
       alert('No puedes transferir a tu propia cuenta');
       return;
@@ -257,6 +278,48 @@ function ClienteDashboard({ usuario, logout, token }) {
     }
   };
 
+  const abrirAclaracion = (tx) => {
+    setTxSeleccionada(tx);
+    setDescripcionAclaracion('');
+    setShowAclaracion(true);
+  };
+
+  const enviarAclaracion = async () => {
+    if (!descripcionAclaracion.trim()) {
+      alert('Describe el motivo de tu aclaración');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/aclaracion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ transaccionId: txSeleccionada._id, descripcion: descripcionAclaracion })
+      });
+      if (res.ok) {
+        alert('✅ Aclaración enviada. Nuestro equipo la revisará pronto.');
+        setShowAclaracion(false);
+        setTxSeleccionada(null);
+        setDescripcionAclaracion('');
+      } else {
+        alert('Error al enviar la aclaración');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const solicitarCredito = (nombre) => {
+    setCreditoNombre(nombre);
+    setShowCreditoModal(true);
+    setCreditoProcesando(true);
+    setTimeout(() => {
+      setCreditoProcesando(false);
+    }, 2500);
+  };
+
   const getEstadoColor = (estado) => {
     if (estado === 'pendiente') return 'bg-yellow-100 text-yellow-800';
     if (estado === 'completada') return 'bg-green-100 text-green-800';
@@ -272,10 +335,6 @@ function ClienteDashboard({ usuario, logout, token }) {
     return '✅ Completada';
   };
 
-  const formatearNumeroTarjeta = (numero) => {
-    return numero.slice(0, 4) + ' ' + numero.slice(4, 8) + ' ' + numero.slice(8, 12) + ' ' + numero.slice(12, 16);
-  };
-
   const formatearFecha = (date) => {
     const mes = String(date.getMonth() + 1).padStart(2, '0');
     const año = date.getFullYear().toString().slice(-2);
@@ -284,6 +343,7 @@ function ClienteDashboard({ usuario, logout, token }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-gray-50 pb-24">
+      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-red-600 text-white p-6 rounded-b-3xl shadow-lg">
         <div className="flex justify-between items-start mb-8">
           <div>
@@ -303,7 +363,8 @@ function ClienteDashboard({ usuario, logout, token }) {
           </div>
         )}
 
-        <div className="bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-md border border-white/30 rounded-2xl p-6 text-white mb-6">
+        {/* Saldo */}
+        <div className="bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-md border border-white/30 rounded-2xl p-6 text-white">
           <p className="text-white/70 text-sm mb-2">SALDO DISPONIBLE</p>
           <div className="flex items-center justify-between">
             <h2 className="text-4xl font-bold">
@@ -314,74 +375,82 @@ function ClienteDashboard({ usuario, logout, token }) {
             </button>
           </div>
         </div>
+      </div>
 
-        <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-2xl transform perspective">
-          <div className="flex justify-between items-start mb-12">
-            <div>
-              <p className="text-blue-100 text-sm mb-2">Tarjeta Virtual</p>
-              <p className="text-white font-mono text-2xl tracking-wider">{usuario.tarjetaVirtual?.numero ? formatearNumeroTarjeta(usuario.tarjetaVirtual.numero) : '•••• •••• •••• ••••'}</p>
-            </div>
-            <CreditCard size={40} className="text-blue-100" />
-          </div>
+      {/* Acciones Rápidas */}
+      <div className="px-4 mt-6 grid grid-cols-3 gap-4">
+        <button onClick={() => setShowTransfer(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
+          <Send className="text-purple-600" size={28} />
+          <span className="text-sm font-semibold text-gray-700">Transferir</span>
+        </button>
+        <button onClick={() => setShowTarjeta(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
+          <CreditCard className="text-blue-600" size={28} />
+          <span className="text-sm font-semibold text-gray-700">Tarjeta</span>
+        </button>
+        <button onClick={() => setShowCuenta(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
+          <Wallet className="text-red-600" size={28} />
+          <span className="text-sm font-semibold text-gray-700">Cuenta</span>
+        </button>
+      </div>
 
-          <div className="flex justify-between items-end">
-            <div>
-              <p className="text-blue-100 text-xs mb-1">Titular</p>
-              <p className="text-white font-semibold text-sm">{usuario.tarjetaVirtual.nombreTitular}</p>
-            </div>
-            <div className="text-right">
-              <div className="flex gap-6">
-                <div>
-                  <p className="text-blue-100 text-xs mb-1">Vencimiento</p>
-                  <p className="text-white font-mono text-sm">{formatearFecha(new Date(usuario.tarjetaVirtual.fechaVencimiento))}</p>
+      {/* Beneficios y Productos */}
+      <div className="px-4 mt-8">
+        <h3 className="font-bold text-gray-900 mb-4 text-lg">Productos para ti</h3>
+        <div className="space-y-3">
+          <div className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                  <CreditCard className="text-purple-600" size={22} />
                 </div>
                 <div>
-                  <p className="text-blue-100 text-xs mb-1">CVV</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-white font-mono text-sm">{showCVV ? usuario.tarjetaVirtual.cvv : '***'}</p>
-                    <button onClick={() => setShowCVV(!showCVV)} className="text-blue-100 hover:text-white">
-                      {showCVV ? <Eye size={14} /> : <EyeOff size={14} />}
-                    </button>
-                  </div>
+                  <p className="font-bold text-gray-900">Tarjeta de Crédito</p>
+                  <p className="text-gray-500 text-xs">Hasta $50,000 de línea de crédito</p>
                 </div>
               </div>
+              <button onClick={() => solicitarCredito('Tarjeta de Crédito')} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition">
+                Solicitar
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <Wallet className="text-green-600" size={22} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900">Crédito de Nómina</p>
+                  <p className="text-gray-500 text-xs">Tasa preferencial para empleados</p>
+                </div>
+              </div>
+              <button onClick={() => solicitarCredito('Crédito de Nómina')} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition">
+                Solicitar
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <ArrowUpRight className="text-red-600" size={22} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900">Crédito Automotriz</p>
+                  <p className="text-gray-500 text-xs">Financia tu auto nuevo o seminuevo</p>
+                </div>
+              </div>
+              <button onClick={() => solicitarCredito('Crédito Automotriz')} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition">
+                Solicitar
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-     <div className="px-4 mt-6 grid grid-cols-3 gap-4">
-  <button onClick={() => setShowTransfer(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-    <Send className="text-purple-600" size={28} />
-    <span className="text-sm font-semibold text-gray-700">Transferir</span>
-  </button>
-  <button onClick={() => setShowTarjeta(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-    <CreditCard className="text-blue-600" size={28} />
-    <span className="text-sm font-semibold text-gray-700">Tarjeta</span>
-  </button>
-  <button onClick={() => setShowCuenta(!showCuenta)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-    <Wallet className="text-red-600" size={28} />
-    <span className="text-sm font-semibold text-gray-700">Cuenta</span>
-  </button>
-</div>
-
-      {showCuenta && (
-        <div className="px-4 mt-6 bg-white rounded-xl p-6 shadow">
-          <h3 className="font-bold text-gray-900 mb-4">Información de Cuenta</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-              <div>
-                <p className="text-sm text-gray-600">Número de Cuenta</p>
-                <p className="font-mono font-bold text-gray-900 text-lg">{usuario.numeroCuenta}</p>
-              </div>
-              <button onClick={copiarCuenta} className="p-2 hover:bg-purple-100 rounded-lg transition">
-                {copied ? <Check size={20} className="text-green-600" /> : <Copy size={20} className="text-purple-600" />}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Transacciones */}
       <div className="px-4 mt-8">
         <h3 className="font-bold text-gray-900 mb-4 text-lg">Últimas transacciones</h3>
         {loadingData ? (
@@ -406,11 +475,17 @@ function ClienteDashboard({ usuario, logout, token }) {
                       {esEmisor ? '-' : '+'} {formatearDinero(tx.monto)}
                     </p>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center mb-2">
                     <span className={`text-xs px-2 py-1 rounded-full ${getEstadoColor(tx.estado)}`}>
                       {getEstadoTexto(tx.estado, tx.createdAt)}
                     </span>
                     <p className="text-gray-400 text-xs">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                    <p className="text-gray-400 text-xs font-mono">Ref: {tx._id.slice(-8).toUpperCase()}</p>
+                    <button onClick={() => abrirAclaracion(tx)} className="flex items-center gap-1 text-xs text-purple-600 font-semibold hover:text-purple-800 transition">
+                      <AlertCircle size={14} /> Aclarar/Reportar
+                    </button>
                   </div>
                 </div>
               );
@@ -421,6 +496,7 @@ function ClienteDashboard({ usuario, logout, token }) {
         )}
       </div>
 
+      {/* Modal Transferencia */}
       {showTransfer && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
@@ -465,70 +541,246 @@ function ClienteDashboard({ usuario, logout, token }) {
           </div>
         </div>
       )}
-      
-{/* Modal Tarjeta Virtual */}
-{showTarjeta && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-2xl p-8 w-full max-w-md">
-      <h3 className="text-2xl font-bold mb-6 text-gray-900 text-center">Mi Tarjeta Virtual</h3>
-      
-      <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-2xl mb-6">
-        <div className="flex justify-between items-start mb-12">
-          <div>
-            <p className="text-blue-100 text-sm mb-2">Número de Tarjeta</p>
-            <p className="text-white font-mono text-2xl tracking-wider">{usuario.tarjetaVirtual?.numero ? usuario.tarjetaVirtual.numero.slice(0, 4) + ' ' + usuario.tarjetaVirtual.numero.slice(4, 8) + ' ' + usuario.tarjetaVirtual.numero.slice(8, 12) + ' ' + usuario.tarjetaVirtual.numero.slice(12, 16) : '•••• •••• •••• ••••'}</p>
+
+      {/* Modal Tarjeta Virtual */}
+      {showTarjeta && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-md">
+            <h3 className="text-2xl font-bold mb-6 text-gray-900 text-center">Mi Tarjeta Virtual</h3>
+
+            <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-2xl mb-6">
+              <div className="flex justify-between items-start mb-12">
+                <div>
+                  <p className="text-blue-100 text-sm mb-2">Número de Tarjeta</p>
+                  <p className="text-white font-mono text-2xl tracking-wider">{usuario.tarjetaVirtual?.numero ? usuario.tarjetaVirtual.numero.slice(0, 4) + ' ' + usuario.tarjetaVirtual.numero.slice(4, 8) + ' ' + usuario.tarjetaVirtual.numero.slice(8, 12) + ' ' + usuario.tarjetaVirtual.numero.slice(12, 16) : '•••• •••• •••• ••••'}</p>
+                </div>
+                <CreditCard size={40} className="text-blue-100" />
+              </div>
+
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-blue-100 text-xs mb-1">Titular</p>
+                  <p className="text-white font-semibold text-sm">{usuario.tarjetaVirtual?.nombreTitular || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-blue-100 text-xs mb-1">Vencimiento</p>
+                  <p className="text-white font-mono text-sm">{usuario.tarjetaVirtual?.fechaVencimiento ? `${String(new Date(usuario.tarjetaVirtual.fechaVencimiento).getMonth() + 1).padStart(2, '0')}/${new Date(usuario.tarjetaVirtual.fechaVencimiento).getFullYear().toString().slice(-2)}` : 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Código de Seguridad (CVV)</p>
+                  <p className="text-2xl font-bold text-gray-900 font-mono">{showCVVModal ? usuario.tarjetaVirtual?.cvv || '***' : '***'}</p>
+                </div>
+                <button onClick={() => setShowCVVModal(!showCVVModal)} className="p-2 hover:bg-gray-200 rounded-lg transition">
+                  {showCVVModal ? <Eye size={24} className="text-gray-700" /> : <EyeOff size={24} className="text-gray-400" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-3 mb-6 text-xs text-blue-800">
+              <p className="font-semibold mb-1">💡 Información Importante</p>
+              <p>Esta es una tarjeta virtual segura para compras en línea. No la compartas con nadie.</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setShowTarjeta(false)} className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition">
+                Cerrar
+              </button>
+              <button onClick={() => navigator.clipboard.writeText(usuario.tarjetaVirtual?.numero || '')} className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2">
+                <Copy size={18} /> Copiar
+              </button>
+            </div>
           </div>
-          <CreditCard size={40} className="text-blue-100" />
         </div>
+      )}
 
-        <div className="flex justify-between items-end">
-          <div>
-            <p className="text-blue-100 text-xs mb-1">Titular</p>
-            <p className="text-white font-semibold text-sm">{usuario.tarjetaVirtual?.nombreTitular || 'N/A'}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-blue-100 text-xs mb-1">Vencimiento</p>
-            <p className="text-white font-mono text-sm">{usuario.tarjetaVirtual?.fechaVencimiento ? `${String(new Date(usuario.tarjetaVirtual.fechaVencimiento).getMonth() + 1).padStart(2, '0')}/${new Date(usuario.tarjetaVirtual.fechaVencimiento).getFullYear().toString().slice(-2)}` : 'N/A'}</p>
+      {/* Modal Mi Cuenta */}
+      {showCuenta && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Mi Cuenta</h3>
+              <button onClick={() => setShowCuenta(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X size={24} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-purple-50 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Nombre del titular</p>
+                <p className="font-bold text-gray-900 text-lg">{usuario.nombre}</p>
+              </div>
+
+              <div className="bg-purple-50 rounded-xl p-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Número de Cuenta</p>
+                    <p className="font-mono font-bold text-gray-900 text-lg">{usuario.numeroCuenta}</p>
+                  </div>
+                  <button onClick={copiarCuenta} className="p-2 hover:bg-purple-100 rounded-lg transition">
+                    {copied ? <Check size={20} className="text-green-600" /> : <Copy size={20} className="text-purple-600" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-purple-50 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Cliente desde</p>
+                <p className="font-semibold text-gray-900">{usuario.createdAt ? formatearFechaCorta(usuario.createdAt) : 'N/A'}</p>
+              </div>
+
+              <button
+                onClick={() => { setShowCuenta(false); setShowEstadoCuenta(true); }}
+                className="w-full flex items-center justify-between bg-white border-2 border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <FileText className="text-purple-600" size={22} />
+                  <span className="font-semibold text-gray-900">Ver Estado de Cuenta</span>
+                </div>
+                <ChevronRight className="text-gray-400" size={20} />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="bg-gray-50 rounded-lg p-4 mb-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-sm text-gray-600 mb-1">Código de Seguridad (CVV)</p>
-            <p className="text-2xl font-bold text-gray-900 font-mono">{showCVVModal ? usuario.tarjetaVirtual?.cvv || '***' : '***'}</p>
+      {/* Modal Estado de Cuenta */}
+      {showEstadoCuenta && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto" style={{ maxHeight: '90vh' }}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold text-gray-900">Estado de Cuenta</h3>
+              <button onClick={() => setShowEstadoCuenta(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X size={24} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="bg-gradient-to-r from-purple-600 to-red-600 rounded-xl p-4 text-white mb-4">
+              <p className="text-xs text-purple-100">Titular: {usuario.nombre}</p>
+              <p className="text-xs text-purple-100">Cuenta: {usuario.numeroCuenta}</p>
+              <p className="text-xs text-purple-100 mt-1">Periodo: {formatearFechaCorta(usuario.createdAt || new Date())} - {formatearFechaCorta(new Date())}</p>
+              <div className="mt-3 pt-3 border-t border-white/20">
+                <p className="text-purple-100 text-xs">Saldo Actual</p>
+                <p className="text-2xl font-bold">{formatearDinero(usuario.saldo)}</p>
+              </div>
+            </div>
+
+            <p className="font-bold text-gray-900 mb-3">Movimientos</p>
+            {transacciones.length > 0 ? (
+              <div className="space-y-2">
+                {transacciones.map(tx => {
+                  const esEmisor = tx.emisorId === usuario._id;
+                  return (
+                    <div key={tx._id} className="flex justify-between items-center py-3 border-b border-gray-100">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{esEmisor ? `Envío a ${tx.receptorNombre}` : `Depósito de ${tx.emisor.nombre}`}</p>
+                        <p className="text-xs text-gray-400">{new Date(tx.createdAt).toLocaleString('es-MX')}</p>
+                        <p className="text-xs text-gray-400 font-mono">Ref: {tx._id.slice(-8).toUpperCase()}</p>
+                      </div>
+                      <p className={`font-bold text-sm ${esEmisor ? 'text-red-600' : 'text-green-600'}`}>
+                        {esEmisor ? '-' : '+'}{formatearDinero(tx.monto)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">No hay movimientos en este periodo</p>
+            )}
           </div>
-          <button onClick={() => setShowCVVModal(!showCVVModal)} className="p-2 hover:bg-gray-200 rounded-lg transition">
-            {showCVVModal ? <Eye size={24} className="text-gray-700" /> : <EyeOff size={24} className="text-gray-400" />}
-          </button>
         </div>
-      </div>
+      )}
 
-      <div className="bg-blue-50 rounded-lg p-3 mb-6 text-xs text-blue-800">
-        <p className="font-semibold mb-1">💡 Información Importante</p>
-        <p>Esta es una tarjeta virtual segura para compras en línea. No la compartas con nadie.</p>
-      </div>
+      {/* Modal Aclaración */}
+      {showAclaracion && txSeleccionada && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-2 text-gray-900">Aclarar Movimiento</h3>
+            <p className="text-xs text-gray-500 font-mono mb-6">Referencia: {txSeleccionada._id.slice(-8).toUpperCase()}</p>
 
-      <div className="flex gap-3">
-        <button onClick={() => setShowTarjeta(false)} className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition">
-          Cerrar
-        </button>
-        <button onClick={() => navigator.clipboard.writeText(usuario.tarjetaVirtual?.numero || '')} className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2">
-          <Copy size={18} /> Copiar
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-gray-600">Monto: <span className="font-bold text-gray-900">{formatearDinero(txSeleccionada.monto)}</span></p>
+              <p className="text-sm text-gray-600">Fecha: <span className="font-bold text-gray-900">{new Date(txSeleccionada.createdAt).toLocaleString('es-MX')}</span></p>
+            </div>
+
+            <label className="block text-sm font-semibold text-gray-700 mb-2">¿Cuál es el motivo de tu aclaración?</label>
+            <textarea
+              value={descripcionAclaracion}
+              onChange={(e) => setDescripcionAclaracion(e.target.value)}
+              placeholder="Describe brevemente el problema con este movimiento..."
+              rows={4}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none mb-4"
+            />
+
+            <div className="bg-blue-50 rounded-lg p-4 mb-6 flex items-center gap-3">
+              <Phone className="text-blue-600" size={22} />
+              <div>
+                <p className="text-xs text-blue-700">¿Necesitas ayuda inmediata? Llama a soporte:</p>
+                <p className="font-bold text-blue-900">{telefonoSoporte}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowAclaracion(false); setTxSeleccionada(null); }}
+                className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={enviarAclaracion}
+                disabled={loading}
+                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+              >
+                {loading ? 'Enviando...' : 'Enviar Aclaración'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Solicitud de Crédito */}
+      {showCreditoModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm text-center">
+            {creditoProcesando ? (
+              <>
+                <div className="w-16 h-16 mx-auto mb-4 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Analizando tu solicitud</h3>
+                <p className="text-gray-500 text-sm">Estamos evaluando tu perfil para {creditoNombre}...</p>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertCircle className="text-red-600" size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Solicitud no aprobada</h3>
+                <p className="text-gray-500 text-sm mb-6">Por el momento no eres apto para {creditoNombre}. Intenta nuevamente más adelante.</p>
+                <button
+                  onClick={() => setShowCreditoModal(false)}
+                  className="w-full py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 transition"
+                >
+                  Entendido
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+// ============ ADMIN DASHBOARD ============
 function AdminDashboard({ usuario, logout, token }) {
   const [tab, setTab] = useState('clientes');
   const [clientes, setClientes] = useState([]);
   const [transacciones, setTransacciones] = useState([]);
+  const [aclaraciones, setAclaraciones] = useState([]);
+  const [telefonoSoporte, setTelefonoSoporte] = useState('');
   const [showNuevo, setShowNuevo] = useState(false);
   const [showDeposito, setShowDeposito] = useState(false);
   const [showEditarCliente, setShowEditarCliente] = useState(false);
@@ -546,16 +798,22 @@ function AdminDashboard({ usuario, logout, token }) {
   const loadData = async () => {
     setLoadingData(true);
     try {
-      const [cRes, txRes] = await Promise.all([
+      const [cRes, txRes, acRes, cfgRes] = await Promise.all([
         fetch(`${apiUrl}/admin/clientes`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${apiUrl}/admin/transacciones`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${apiUrl}/admin/transacciones`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${apiUrl}/admin/aclaraciones`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${apiUrl}/configuracion`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       const c = await cRes.json();
       const tx = await txRes.json();
+      const ac = await acRes.json();
+      const cfg = await cfgRes.json();
 
       if (Array.isArray(c)) setClientes(c);
       if (Array.isArray(tx)) setTransacciones(tx);
+      if (Array.isArray(ac)) setAclaraciones(ac);
+      if (cfg.telefonoSoporte) setTelefonoSoporte(cfg.telefonoSoporte);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -733,8 +991,43 @@ function AdminDashboard({ usuario, logout, token }) {
     }
   };
 
+  const guardarTelefono = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/admin/configuracion`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ telefonoSoporte })
+      });
+      if (res.ok) {
+        alert('✅ Teléfono de soporte actualizado');
+      } else {
+        alert('Error al actualizar');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const marcarRevisado = async (id) => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/aclaraciones/${id}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        await loadData();
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-gray-50 pb-12">
+      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-red-600 text-white p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Panel Admin</h1>
@@ -745,7 +1038,8 @@ function AdminDashboard({ usuario, logout, token }) {
         <p className="text-white/80">Bienvenido, {usuario.nombre}</p>
       </div>
 
-      <div className="px-4 mt-6 flex gap-2">
+      {/* Tabs */}
+      <div className="px-4 mt-6 flex gap-2 flex-wrap">
         <button
           onClick={() => setTab('clientes')}
           className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'clientes' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700'}`}
@@ -758,8 +1052,21 @@ function AdminDashboard({ usuario, logout, token }) {
         >
           Transacciones ({transacciones.length})
         </button>
+        <button
+          onClick={() => setTab('aclaraciones')}
+          className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'aclaraciones' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700'}`}
+        >
+          Aclaraciones ({aclaraciones.filter(a => a.estado === 'pendiente').length})
+        </button>
+        <button
+          onClick={() => setTab('configuracion')}
+          className={`px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2 ${tab === 'configuracion' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700'}`}
+        >
+          <Settings size={16} /> Config
+        </button>
       </div>
 
+      {/* Content */}
       {tab === 'clientes' && (
         <div className="p-4">
           <div className="flex gap-2 mb-6">
@@ -820,6 +1127,7 @@ function AdminDashboard({ usuario, logout, token }) {
                     <div>
                       <p className="font-bold text-gray-900 text-sm">{tx.emisor.nombre || 'Admin'} → {tx.receptorNombre}</p>
                       <p className="text-gray-400 text-xs">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                      <p className="text-gray-400 text-xs font-mono">Ref: {tx._id.slice(-8).toUpperCase()}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-green-600">{formatearDinero(tx.monto)}</p>
@@ -837,6 +1145,63 @@ function AdminDashboard({ usuario, logout, token }) {
         </div>
       )}
 
+      {tab === 'aclaraciones' && (
+        <div className="p-4">
+          {loadingData ? (
+            <p className="text-gray-500 text-center py-8">Cargando...</p>
+          ) : aclaraciones.length > 0 ? (
+            <div className="space-y-3">
+              {aclaraciones.map(ac => (
+                <div key={ac._id} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold text-gray-900">{ac.clienteNombre}</p>
+                      <p className="text-gray-400 text-xs">{new Date(ac.createdAt).toLocaleString('es-MX')}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${ac.estado === 'pendiente' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                      {ac.estado === 'pendiente' ? '⏳ Pendiente' : '✅ Revisado'}
+                    </span>
+                  </div>
+                  <p className="text-gray-700 text-sm bg-gray-50 rounded-lg p-3 mb-3">{ac.descripcion}</p>
+                  {ac.estado === 'pendiente' && (
+                    <button onClick={() => marcarRevisado(ac._id)} className="w-full py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition">
+                      Marcar como Revisado
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">No hay aclaraciones</p>
+          )}
+        </div>
+      )}
+
+      {tab === 'configuracion' && (
+        <div className="p-4">
+          <div className="bg-white rounded-xl p-6 shadow">
+            <h3 className="font-bold text-gray-900 mb-4">Configuración General</h3>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">📞 Teléfono de Soporte</label>
+            <p className="text-xs text-gray-500 mb-3">Este número se muestra a los clientes cuando reportan un movimiento.</p>
+            <input
+              type="text"
+              value={telefonoSoporte}
+              onChange={(e) => setTelefonoSoporte(e.target.value)}
+              placeholder="01-800-000-0000"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none mb-4"
+            />
+            <button
+              onClick={guardarTelefono}
+              disabled={loading}
+              className="w-full py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+            >
+              {loading ? 'Guardando...' : 'Guardar Cambios'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear Cliente */}
       {showNuevo && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
@@ -890,11 +1255,12 @@ function AdminDashboard({ usuario, logout, token }) {
         </div>
       )}
 
+      {/* Modal Editar Cliente */}
       {showEditarCliente && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
             <h3 className="text-2xl font-bold mb-8 text-gray-900">Editar Cliente: {clienteEditando?.nombre}</h3>
-            
+
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Nombre Completo</label>
@@ -974,6 +1340,7 @@ function AdminDashboard({ usuario, logout, token }) {
         </div>
       )}
 
+      {/* Modal Depósito */}
       {showDeposito && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
