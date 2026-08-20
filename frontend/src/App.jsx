@@ -171,6 +171,9 @@ function ClienteDashboard({ usuario, logout, token }) {
   const [descripcionAclaracion, setDescripcionAclaracion] = useState('');
   const [telefonoSoporte, setTelefonoSoporte] = useState('01-800-000-0000');
   const [numeroCuentaDestino, setNumeroCuentaDestino] = useState('');
+  const [nombreBeneficiario, setNombreBeneficiario] = useState('');
+  const [bancoDestino, setBancoDestino] = useState('Banbajío');
+  const [conceptoTransferencia, setConceptoTransferencia] = useState('');
   const [monto, setMonto] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -234,15 +237,18 @@ function ClienteDashboard({ usuario, logout, token }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const resetTransferForm = () => {
+const resetTransferForm = () => {
     setShowTransfer(false);
     setNumeroCuentaDestino('');
+    setNombreBeneficiario('');
+    setBancoDestino('Banbajío');
+    setConceptoTransferencia('');
     setMonto('');
   };
 
-  const realizar = async () => {
-    if (!numeroCuentaDestino || !monto) {
-      alert('Ingresa número de cuenta y monto');
+ const realizar = async () => {
+    if (!numeroCuentaDestino || !nombreBeneficiario || !monto) {
+      alert('Completa número de cuenta, nombre y monto');
       return;
     }
     if (parseFloat(monto) <= 0) {
@@ -259,7 +265,13 @@ function ClienteDashboard({ usuario, logout, token }) {
       const res = await fetch(`${apiUrl}/transferencia`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ receptorNumeroCuenta: numeroCuentaDestino, monto: parseFloat(monto), descripcion: '' })
+        body: JSON.stringify({
+          receptorNumeroCuenta: numeroCuentaDestino,
+          nombreBeneficiario,
+          bancoDestino,
+          monto: parseFloat(monto),
+          descripcion: conceptoTransferencia || ''
+        })
       });
 
       const data = await res.json();
@@ -493,51 +505,90 @@ function ClienteDashboard({ usuario, logout, token }) {
       </div>
 
       {/* Modal Transferencia */}
-      {showTransfer && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-          <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
-            <h3 className="text-2xl font-bold mb-6 text-gray-900">Transferencia</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Número de Cuenta</label>
-                <input
-                  type="text"
-                  value={numeroCuentaDestino}
-                  onChange={(e) => setNumeroCuentaDestino(e.target.value)}
-                  placeholder="Ej: 1234567890"
-                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Monto</label>
-                <input
-                  type="number"
-                  value={monto}
-                  onChange={(e) => setMonto(e.target.value)}
-                  placeholder="$0.00"
-                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={resetTransferForm}
-                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={realizar}
-                  disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
-                >
-                  {loading ? 'Procesando...' : 'Transferir'}
-                </button>
-              </div>
-            </div>
-          </div>
+{showTransfer && (
+  <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+    <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+      <h3 className="text-2xl font-bold mb-6 text-gray-900">Transferencia</h3>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Número de Cuenta</label>
+          <input
+            type="text"
+            value={numeroCuentaDestino}
+            onChange={(e) => setNumeroCuentaDestino(e.target.value)}
+            placeholder="Ej: 1234567890"
+            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+          />
         </div>
-      )}
-
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Beneficiario</label>
+          <input
+            type="text"
+            value={nombreBeneficiario}
+            onChange={(e) => setNombreBeneficiario(e.target.value)}
+            placeholder="Ej: Juan Pérez"
+            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Banco</label>
+          <select
+            value={bancoDestino}
+            onChange={(e) => setBancoDestino(e.target.value)}
+            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-white"
+          >
+            <option value="Banbajío">Banbajío</option>
+            <option value="BBVA">BBVA</option>
+            <option value="Banorte">Banorte</option>
+            <option value="Santander">Santander</option>
+            <option value="HSBC">HSBC</option>
+            <option value="Citibanamex">Citibanamex</option>
+            <option value="Scotiabank">Scotiabank</option>
+            <option value="Banco Azteca">Banco Azteca</option>
+            <option value="Inbursa">Inbursa</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Concepto</label>
+          <input
+            type="text"
+            value={conceptoTransferencia}
+            onChange={(e) => setConceptoTransferencia(e.target.value)}
+            placeholder="Ej: Pago de renta"
+            maxLength={40}
+            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Monto</label>
+          <input
+            type="number"
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            placeholder="$0.00"
+            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex gap-3 pt-4">
+          <button
+            onClick={resetTransferForm}
+            className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={realizar}
+            disabled={loading}
+            className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+          >
+            {loading ? 'Procesando...' : 'Transferir'}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       {/* Modal Tarjeta Virtual */}
       {showTarjeta && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
