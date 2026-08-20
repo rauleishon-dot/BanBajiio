@@ -178,6 +178,8 @@ function ClienteDashboard({ usuario, logout, token }) {
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showDetalleTx, setShowDetalleTx] = useState(false);
+  const [txDetalle, setTxDetalle] = useState(null);
   const [showCreditoModal, setShowCreditoModal] = useState(false);
   const [creditoProcesando, setCreditoProcesando] = useState(false);
   const [creditoNombre, setCreditoNombre] = useState('');
@@ -465,10 +467,10 @@ const resetTransferForm = () => {
           <p className="text-gray-500 text-center py-8">Cargando...</p>
         ) : transacciones.length > 0 ? (
           <div className="space-y-3">
-            {transacciones.map(tx => {
+           {transacciones.map(tx => {
               const esEmisor = tx.emisorId === usuario._id;
               return (
-                <div key={tx._id} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
+                <div key={tx._id} onClick={() => { setTxDetalle(tx); setShowDetalleTx(true); }} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition cursor-pointer">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${esEmisor ? 'bg-red-100' : 'bg-green-100'}`}>
@@ -491,7 +493,7 @@ const resetTransferForm = () => {
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                     <p className="text-gray-400 text-xs font-mono">Ref: {tx._id.slice(-8).toUpperCase()}</p>
-                    <button onClick={() => abrirAclaracion(tx)} className="flex items-center gap-1 text-xs text-purple-600 font-semibold hover:text-purple-800 transition">
+                    <button onClick={(e) => { e.stopPropagation(); abrirAclaracion(tx); }} className="flex items-center gap-1 text-xs text-purple-600 font-semibold hover:text-purple-800 transition">
                       <AlertCircle size={14} /> Aclarar/Reportar
                     </button>
                   </div>
@@ -740,7 +742,78 @@ const resetTransferForm = () => {
           </div>
         </div>
       )}
+{/* Modal Detalle de Transacción */}
+{showDetalleTx && txDetalle && (
+  <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowDetalleTx(false)}>
+    <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-2xl font-bold text-gray-900">Detalle de Transacción</h3>
+        <button onClick={() => setShowDetalleTx(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+          <X size={24} className="text-gray-500" />
+        </button>
+      </div>
 
+      {(() => {
+        const esEmisor = txDetalle.emisorId === usuario._id;
+        return (
+          <>
+            <div className={`rounded-2xl p-6 text-white mb-6 ${esEmisor ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-green-500 to-green-600'}`}>
+              <p className="text-white/80 text-sm mb-1">{esEmisor ? 'Enviaste' : 'Recibiste'}</p>
+              <p className="text-3xl font-bold">{esEmisor ? '-' : '+'}{formatearDinero(txDetalle.monto)}</p>
+              <span className={`inline-block mt-3 text-xs px-3 py-1 rounded-full ${getEstadoColor(txDetalle.estado)}`}>
+                {getEstadoTexto(txDetalle.estado)}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                <span className="text-gray-500 text-sm">{esEmisor ? 'Beneficiario' : 'Remitente'}</span>
+                <span className="font-semibold text-gray-900">{esEmisor ? txDetalle.receptorNombre : txDetalle.emisor.nombre}</span>
+              </div>
+
+              {esEmisor && (
+                <>
+                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                    <span className="text-gray-500 text-sm">Número de Cuenta</span>
+                    <span className="font-mono font-semibold text-gray-900">{txDetalle.receptorNumeroCuenta}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                    <span className="text-gray-500 text-sm">Banco</span>
+                    <span className="font-semibold text-gray-900">{txDetalle.bancoDestino || 'Banbajío'}</span>
+                  </div>
+                </>
+              )}
+
+              {txDetalle.descripcion && (
+                <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                  <span className="text-gray-500 text-sm">Concepto</span>
+                  <span className="font-semibold text-gray-900">{txDetalle.descripcion}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                <span className="text-gray-500 text-sm">Fecha</span>
+                <span className="font-semibold text-gray-900">{new Date(txDetalle.createdAt).toLocaleString('es-MX')}</span>
+              </div>
+
+              <div className="flex justify-between items-center py-3">
+                <span className="text-gray-500 text-sm">Referencia</span>
+                <span className="font-mono font-semibold text-gray-900">{txDetalle._id.slice(-8).toUpperCase()}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { setShowDetalleTx(false); abrirAclaracion(txDetalle); }}
+              className="w-full mt-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition flex items-center justify-center gap-2"
+            >
+              <AlertCircle size={18} /> Aclarar este movimiento
+            </button>
+          </>
+        );
+      })()}
+    </div>
+  </div>
+)}
       {/* Modal Aclaración */}
       {showAclaracion && txSeleccionada && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
