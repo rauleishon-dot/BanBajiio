@@ -326,12 +326,8 @@ function ClienteDashboard({ usuario, logout, token }) {
     return 'bg-gray-100 text-gray-800';
   };
 
-  const getEstadoTexto = (estado, fecha) => {
-    if (estado === 'pendiente') {
-      const minutos = Math.floor((Date.now() - new Date(fecha).getTime()) / 60000);
-      const faltantes = Math.max(0, 30 - minutos);
-      return `⏳ Pendiente (${faltantes} min)`;
-    }
+  const getEstadoTexto = (estado) => {
+    if (estado === 'pendiente') return '⏳ Pendiente';
     return '✅ Completada';
   };
 
@@ -477,7 +473,7 @@ function ClienteDashboard({ usuario, logout, token }) {
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className={`text-xs px-2 py-1 rounded-full ${getEstadoColor(tx.estado)}`}>
-                      {getEstadoTexto(tx.estado, tx.createdAt)}
+                      {getEstadoTexto(tx.estado)}
                     </span>
                     <p className="text-gray-400 text-xs">{new Date(tx.createdAt).toLocaleDateString()}</p>
                   </div>
