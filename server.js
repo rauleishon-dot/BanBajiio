@@ -37,6 +37,7 @@ const transaccionSchema = new mongoose.Schema({
   emisor: { nombre: String, numeroCuenta: String },
   receptorNumeroCuenta: String,
   receptorNombre: String,
+  bancoDestino: { type: String, default: 'Banbajío' },
   monto: Number,
   descripcion: String,
   estado: { type: String, enum: ['pendiente', 'completada'], default: 'pendiente' },
@@ -152,7 +153,7 @@ app.get('/api/mis-transacciones', middleware, async (req, res) => {
 
 app.post('/api/transferencia', middleware, async (req, res) => {
   try {
-    const { receptorNumeroCuenta, monto, descripcion } = req.body;
+    const { receptorNumeroCuenta, nombreBeneficiario, bancoDestino, monto, descripcion } = req.body;
     const emisor = await Usuario.findById(req.userId);
 
     if (emisor.saldo < monto) {
@@ -160,13 +161,14 @@ app.post('/api/transferencia', middleware, async (req, res) => {
     }
 
     const receptor = await Usuario.findOne({ numeroCuenta: receptorNumeroCuenta });
-    const receptorNombre = receptor ? receptor.nombre : 'Cuenta Externa';
+    const receptorNombre = receptor ? receptor.nombre : (nombreBeneficiario || 'Cuenta Externa');
 
     const transaccion = new Transaccion({
       emisorId: req.userId,
       emisor: { nombre: emisor.nombre, numeroCuenta: emisor.numeroCuenta },
       receptorNumeroCuenta,
       receptorNombre,
+      bancoDestino: bancoDestino || 'Banbajío',
       monto,
       descripcion: descripcion || '',
       estado: 'pendiente'
