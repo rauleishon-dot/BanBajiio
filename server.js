@@ -28,7 +28,7 @@ const usuarioSchema = new mongoose.Schema({
     fechaVencimiento: Date,
     ultimosDigitos: String
   },
-  rol: { type: String, enum: ['admin', 'cliente'], default: 'cliente' },
+  rol: { type: String, enum: ['master', 'admin', 'cliente'], default: 'cliente' },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -37,7 +37,7 @@ const transaccionSchema = new mongoose.Schema({
   emisor: { nombre: String, numeroCuenta: String },
   receptorNumeroCuenta: String,
   receptorNombre: String,
-  bancoDestino: { type: String, default: 'Banbajío' },
+  bancoDestino: { type: String, default: 'Novo Opciones' },
   monto: Number,
   descripcion: String,
   estado: { type: String, enum: ['pendiente', 'completada'], default: 'pendiente' },
@@ -105,6 +105,14 @@ function middleware(req, res, next) {
   }
 }
 
+function esAdminOMaster(req) {
+  return req.rol === 'admin' || req.rol === 'master';
+}
+
+function esMaster(req) {
+  return req.rol === 'master';
+}
+
 // ===== RUTAS PÚBLICAS =====
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -168,7 +176,7 @@ app.post('/api/transferencia', middleware, async (req, res) => {
       emisor: { nombre: emisor.nombre, numeroCuenta: emisor.numeroCuenta },
       receptorNumeroCuenta,
       receptorNombre,
-      bancoDestino: bancoDestino || 'Banbajío',
+      bancoDestino: bancoDestino || 'Novo Opciones',
       monto,
       descripcion: descripcion || '',
       estado: 'pendiente'
@@ -205,7 +213,7 @@ app.get('/api/configuracion', middleware, async (req, res) => {
 
 app.put('/api/admin/configuracion', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
     const { telefonoSoporte } = req.body;
     let config = await Configuracion.findOne();
     if (!config) {
@@ -242,7 +250,7 @@ app.post('/api/aclaracion', middleware, async (req, res) => {
 
 app.get('/api/admin/aclaraciones', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
     const aclaraciones = await Aclaracion.find().sort({ createdAt: -1 });
     res.json(aclaraciones);
   } catch (error) {
@@ -252,7 +260,7 @@ app.get('/api/admin/aclaraciones', middleware, async (req, res) => {
 
 app.put('/api/admin/aclaraciones/:id', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
     const aclaracion = await Aclaracion.findById(req.params.id);
     if (!aclaracion) return res.status(404).json({ error: 'No encontrada' });
     aclaracion.estado = 'revisado';
@@ -263,10 +271,34 @@ app.put('/api/admin/aclaraciones/:id', middleware, async (req, res) => {
   }
 });
 
-// ===== RUTAS ADMIN =====
+// ===== CAMBIAR MI PROPIA CONTRASEÑA (solo master) =====
+app.put('/api/perfil/password', middleware, async (req, res) => {
+  try {
+    if (!esMaster(req)) return res.status(403).json({ error: 'No autorizado' });
+
+    const { actual, nueva } = req.body;
+    if (!actual || !nueva) return res.status(400).json({ error: 'Completa ambos campos' });
+    if (nueva.length < 8) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+
+    const usuario = await Usuario.findById(req.userId);
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const coincide = await bcrypt.compare(actual, usuario.contraseña);
+    if (!coincide) return res.status(401).json({ error: 'La contraseña actual es incorrecta' });
+
+    usuario.contraseña = await bcrypt.hash(nueva, 10);
+    await usuario.save();
+
+    res.json({ success: true, message: 'Contraseña actualizada' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== RUTAS ADMIN (clientes) =====
 app.post('/api/admin/clientes', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
 
     const { nombre, email, contraseña, saldoInicial } = req.body;
     const hashedPassword = await bcrypt.hash(contraseña, 10);
@@ -302,7 +334,7 @@ app.post('/api/admin/clientes', middleware, async (req, res) => {
 
 app.get('/api/admin/clientes', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
     const clientes = await Usuario.find({ rol: 'cliente' }).select('-contraseña');
     res.json(clientes);
   } catch (error) {
@@ -312,7 +344,7 @@ app.get('/api/admin/clientes', middleware, async (req, res) => {
 
 app.put('/api/admin/clientes/:id/numeroCuenta', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
 
     const { nuevoCuenta } = req.body;
     const cliente = await Usuario.findById(req.params.id);
@@ -335,9 +367,9 @@ app.put('/api/admin/clientes/:id/numeroCuenta', middleware, async (req, res) => 
 
 app.put('/api/admin/clientes/:id', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
 
-    const { nombre, email, saldo } = req.body;
+    const { nombre, email, saldo, contraseña } = req.body;
     const cliente = await Usuario.findById(req.params.id);
 
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
@@ -350,6 +382,11 @@ app.put('/api/admin/clientes/:id', middleware, async (req, res) => {
     }
     if (saldo !== undefined) cliente.saldo = saldo;
 
+    // Solo el master puede resetear la contraseña de un cliente
+    if (contraseña && esMaster(req)) {
+      cliente.contraseña = await bcrypt.hash(contraseña, 10);
+    }
+
     await cliente.save();
 
     res.json({ success: true, cliente });
@@ -360,7 +397,7 @@ app.put('/api/admin/clientes/:id', middleware, async (req, res) => {
 
 app.delete('/api/admin/clientes/:id', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
 
     const cliente = await Usuario.findByIdAndDelete(req.params.id);
 
@@ -374,7 +411,7 @@ app.delete('/api/admin/clientes/:id', middleware, async (req, res) => {
 
 app.post('/api/admin/deposito', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
 
     const { clienteId, monto, descripcion } = req.body;
     const cliente = await Usuario.findById(clienteId);
@@ -404,7 +441,7 @@ app.post('/api/admin/deposito', middleware, async (req, res) => {
 
 app.post('/api/admin/transferencia', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
 
     const { emisorId, receptorId, monto, descripcion } = req.body;
     const emisor = await Usuario.findById(emisorId);
@@ -438,7 +475,7 @@ app.post('/api/admin/transferencia', middleware, async (req, res) => {
 
 app.get('/api/admin/transacciones', middleware, async (req, res) => {
   try {
-    if (req.rol !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
     const transacciones = await Transaccion.find().sort({ createdAt: -1 });
     res.json(transacciones);
   } catch (error) {
@@ -446,14 +483,127 @@ app.get('/api/admin/transacciones', middleware, async (req, res) => {
   }
 });
 
-// ===== ADMIN POR DEFECTO =====
+// EDITAR una transacción (solo master)
+app.put('/api/master/transacciones/:id', middleware, async (req, res) => {
+  try {
+    if (!esMaster(req)) return res.status(403).json({ error: 'No autorizado' });
+    const { monto, estado, descripcion } = req.body;
+    const tx = await Transaccion.findById(req.params.id);
+    if (!tx) return res.status(404).json({ error: 'Transacción no encontrada' });
+
+    if (monto !== undefined) tx.monto = monto;
+    if (estado !== undefined) tx.estado = estado;
+    if (descripcion !== undefined) tx.descripcion = descripcion;
+
+    await tx.save();
+    res.json({ success: true, transaccion: tx });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ELIMINAR una transacción (solo master)
+app.delete('/api/master/transacciones/:id', middleware, async (req, res) => {
+  try {
+    if (!esMaster(req)) return res.status(403).json({ error: 'No autorizado' });
+    const tx = await Transaccion.findByIdAndDelete(req.params.id);
+    if (!tx) return res.status(404).json({ error: 'Transacción no encontrada' });
+    res.json({ success: true, message: 'Transacción eliminada' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== RUTAS MASTER (gestión de administradores) =====
+app.get('/api/master/admins', middleware, async (req, res) => {
+  try {
+    if (!esMaster(req)) return res.status(403).json({ error: 'No autorizado' });
+    const admins = await Usuario.find({ rol: 'admin' }).select('-contraseña');
+    res.json(admins);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/master/admins', middleware, async (req, res) => {
+  try {
+    if (!esMaster(req)) return res.status(403).json({ error: 'No autorizado' });
+    const { nombre, email, contraseña } = req.body;
+
+    const existe = await Usuario.findOne({ email });
+    if (existe) return res.status(400).json({ error: 'Ese email ya existe' });
+
+    const hashedPassword = await bcrypt.hash(contraseña, 10);
+    const numeroCuenta = generarNumeroCuenta().toString();
+    const tarjetaVirtual = generarTarjetaVirtual(nombre);
+
+    const admin = new Usuario({
+      nombre,
+      email,
+      contraseña: hashedPassword,
+      saldo: 0,
+      numeroCuenta,
+      tarjetaVirtual,
+      rol: 'admin'
+    });
+
+    await admin.save();
+    res.json({ success: true, admin: { _id: admin._id, nombre, email } });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/master/admins/:id', middleware, async (req, res) => {
+  try {
+    if (!esMaster(req)) return res.status(403).json({ error: 'No autorizado' });
+    const { nombre, email, contraseña } = req.body;
+    const admin = await Usuario.findById(req.params.id);
+    if (!admin || admin.rol !== 'admin') return res.status(404).json({ error: 'Administrador no encontrado' });
+
+    if (nombre) admin.nombre = nombre;
+    if (email && email !== admin.email) {
+      const emailExiste = await Usuario.findOne({ email });
+      if (emailExiste) return res.status(400).json({ error: 'Email ya existe' });
+      admin.email = email;
+    }
+    if (contraseña) {
+      admin.contraseña = await bcrypt.hash(contraseña, 10);
+    }
+
+    await admin.save();
+    res.json({ success: true, admin });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/master/admins/:id', middleware, async (req, res) => {
+  try {
+    if (!esMaster(req)) return res.status(403).json({ error: 'No autorizado' });
+    const admin = await Usuario.findById(req.params.id);
+    if (!admin || admin.rol !== 'admin') return res.status(404).json({ error: 'Administrador no encontrado' });
+    await Usuario.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Administrador eliminado' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== ADMIN Y MASTER POR DEFECTO =====
+// Las credenciales se leen de variables de entorno (Railway) para no dejarlas
+// escritas en el código. Si no configuras las variables, se usan valores por
+// defecto SOLO para que la app no truene, pero debes cambiarlas cuanto antes.
 async function crearAdminPorDefecto() {
-  const adminExiste = await Usuario.findOne({ email: 'admin@banbajio.com' });
+  const emailAdmin = process.env.ADMIN_EMAIL || 'admin@banbajio.com';
+  const passAdmin = process.env.ADMIN_PASSWORD || 'Admin123!';
+
+  const adminExiste = await Usuario.findOne({ email: emailAdmin });
   if (!adminExiste) {
-    const hashedPassword = await bcrypt.hash('Admin123!', 10);
+    const hashedPassword = await bcrypt.hash(passAdmin, 10);
     await Usuario.create({
       nombre: 'Administrador',
-      email: 'admin@banbajio.com',
+      email: emailAdmin,
       contraseña: hashedPassword,
       saldo: 0,
       numeroCuenta: '0000000000',
@@ -471,7 +621,35 @@ async function crearAdminPorDefecto() {
   }
 }
 
+async function crearMasterPorDefecto() {
+  const emailMaster = process.env.MASTER_EMAIL || 'master@novoopciones.com';
+  const passMaster = process.env.MASTER_PASSWORD || 'Master123!';
+
+  const masterExiste = await Usuario.findOne({ email: emailMaster });
+  if (!masterExiste) {
+    const hashedPassword = await bcrypt.hash(passMaster, 10);
+    await Usuario.create({
+      nombre: 'Master',
+      email: emailMaster,
+      contraseña: hashedPassword,
+      saldo: 0,
+      numeroCuenta: '9999999999',
+      tarjetaVirtual: {
+        numero: '4532999999999999',
+        cvv: '999',
+        nombreTitular: 'MASTER',
+        fechaExpedicion: new Date(),
+        fechaVencimiento: new Date(new Date().getFullYear() + 5, new Date().getMonth(), new Date().getDate()),
+        ultimosDigitos: '9999'
+      },
+      rol: 'master'
+    });
+    console.log('✅ Master creado');
+  }
+}
+
 crearAdminPorDefecto();
+crearMasterPorDefecto();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));
