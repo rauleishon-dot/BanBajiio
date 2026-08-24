@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, LogOut, Send, Plus, CreditCard, Menu, X, ArrowUpRight, ArrowDownLeft, Wallet, Copy, Check, Edit, Trash2, FileText, Phone, AlertCircle, Settings, ChevronRight } from 'lucide-react';
+import { Eye, EyeOff, LogOut, Send, Plus, CreditCard, Menu, X, ArrowUpRight, ArrowDownLeft, Wallet, Copy, Check, Edit, Trash2, FileText, Phone, AlertCircle, Settings, ChevronRight, CheckCircle2 } from 'lucide-react';
 
 const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const NOMBRE_APP = 'Novo Opciones';
+const RAZON_SOCIAL = 'Novo Opciones, S.A.P.I. de C.V., SOFOM, E.N.R.';
 
 function formatearDinero(cantidad) {
   return '$' + cantidad.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -95,12 +97,12 @@ function LoginScreen({ login }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-900 to-purple-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-b from-blue-950 to-blue-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Banbajío" className="w-24 h-24 mx-auto mb-4" />
-          <h1 className="text-4xl font-bold text-white mb-2">Banbajío</h1>
-          <p className="text-purple-200">Tu banco digital seguro</p>
+          <img src="/logo.png" alt={NOMBRE_APP} className="w-24 h-24 mx-auto mb-4 rounded-full shadow-lg" />
+          <h1 className="text-4xl font-bold text-white mb-2">{NOMBRE_APP}</h1>
+          <p className="text-blue-200">Tu banco digital seguro</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-2xl p-8 space-y-4">
@@ -111,7 +113,7 @@ function LoginScreen({ login }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tu@email.com"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none transition"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition"
               required
             />
           </div>
@@ -124,13 +126,13 @@ function LoginScreen({ login }) {
                 value={contraseña}
                 onChange={(e) => setContraseña(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none transition"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition"
                 required
               />
               <button
                 type="button"
                 onClick={() => setMostrar(!mostrar)}
-                className="absolute right-3 top-3 text-gray-500 hover:text-purple-600"
+                className="absolute right-3 top-3 text-gray-500 hover:text-blue-600"
               >
                 {mostrar ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
@@ -140,7 +142,7 @@ function LoginScreen({ login }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-purple-600 to-red-600 hover:from-purple-700 hover:to-red-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-50 mt-6"
+            className="w-full bg-gradient-to-r from-blue-800 to-blue-600 hover:from-blue-900 hover:to-blue-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-50 mt-6"
           >
             {loading ? 'Iniciando...' : 'Iniciar Sesión'}
           </button>
@@ -151,6 +153,8 @@ function LoginScreen({ login }) {
           <p>📧 admin@banbajio.com</p>
           <p>🔑 Admin123!</p>
         </div>
+
+        <p className="text-center text-blue-300 text-xs mt-6">{RAZON_SOCIAL}</p>
       </div>
     </div>
   );
@@ -167,25 +171,25 @@ function ClienteDashboard({ usuario, logout, token }) {
   const [showTarjeta, setShowTarjeta] = useState(false);
   const [showEstadoCuenta, setShowEstadoCuenta] = useState(false);
   const [showAclaracion, setShowAclaracion] = useState(false);
+  const [showDetalleTx, setShowDetalleTx] = useState(false);
+  const [txDetalle, setTxDetalle] = useState(null);
   const [txSeleccionada, setTxSeleccionada] = useState(null);
   const [descripcionAclaracion, setDescripcionAclaracion] = useState('');
   const [telefonoSoporte, setTelefonoSoporte] = useState('01-800-000-0000');
   const [numeroCuentaDestino, setNumeroCuentaDestino] = useState('');
   const [nombreBeneficiario, setNombreBeneficiario] = useState('');
-  const [bancoDestino, setBancoDestino] = useState('Banbajío');
+  const [bancoDestino, setBancoDestino] = useState(NOMBRE_APP);
   const [conceptoTransferencia, setConceptoTransferencia] = useState('');
   const [monto, setMonto] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [showDetalleTx, setShowDetalleTx] = useState(false);
-  const [txDetalle, setTxDetalle] = useState(null);
   const [showCreditoModal, setShowCreditoModal] = useState(false);
   const [creditoProcesando, setCreditoProcesando] = useState(false);
   const [creditoNombre, setCreditoNombre] = useState('');
 
-  const loadData = async () => {
-    setLoadingData(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoadingData(true);
     try {
       const res = await fetch(`${apiUrl}/mis-transacciones`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -195,7 +199,7 @@ function ClienteDashboard({ usuario, logout, token }) {
     } catch (error) {
       console.error('Error:', error);
     } finally {
-      setLoadingData(false);
+      if (!silent) setLoadingData(false);
     }
   };
 
@@ -214,22 +218,27 @@ function ClienteDashboard({ usuario, logout, token }) {
   useEffect(() => {
     loadData();
     loadConfig();
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(() => loadData(true), 5000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setTransacciones(prev => prev.map(tx => {
-        if (tx.estado === 'pendiente') {
-          const minutos = (Date.now() - new Date(tx.createdAt).getTime()) / 60000;
-          if (minutos >= 30) {
-            return { ...tx, estado: 'completada' };
+      setTransacciones(prev => {
+        let cambio = false;
+        const next = prev.map(tx => {
+          if (tx.estado === 'pendiente') {
+            const minutos = (Date.now() - new Date(tx.createdAt).getTime()) / 60000;
+            if (minutos >= 30) {
+              cambio = true;
+              return { ...tx, estado: 'completada' };
+            }
           }
-        }
-        return tx;
-      }));
-    }, 10000);
+          return tx;
+        });
+        return cambio ? next : prev;
+      });
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -239,16 +248,16 @@ function ClienteDashboard({ usuario, logout, token }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-const resetTransferForm = () => {
+  const resetTransferForm = () => {
     setShowTransfer(false);
     setNumeroCuentaDestino('');
     setNombreBeneficiario('');
-    setBancoDestino('Banbajío');
+    setBancoDestino(NOMBRE_APP);
     setConceptoTransferencia('');
     setMonto('');
   };
 
- const realizar = async () => {
+  const realizar = async () => {
     if (!numeroCuentaDestino || !nombreBeneficiario || !monto) {
       alert('Completa número de cuenta, nombre y monto');
       return;
@@ -279,9 +288,10 @@ const resetTransferForm = () => {
       const data = await res.json();
 
       if (res.ok) {
-        alert('✅ Transferencia iniciada (Pendiente por 30 minutos)');
         resetTransferForm();
         await loadData();
+        setTxDetalle(data.transaccion);
+        setShowDetalleTx(true);
       } else {
         alert('Error: ' + (data.error || 'No se pudo procesar'));
       }
@@ -352,12 +362,12 @@ const resetTransferForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-gray-50 pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-gray-50 pb-24">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-red-600 text-white p-6 rounded-b-3xl shadow-lg">
+      <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-b-3xl shadow-lg">
         <div className="flex justify-between items-start mb-8">
           <div>
-            <p className="text-purple-200 text-sm">Bienvenido</p>
+            <p className="text-blue-200 text-sm">Bienvenido</p>
             <h1 className="text-2xl font-bold">{usuario.nombre}</h1>
           </div>
           <button onClick={() => setShowMenu(!showMenu)} className="p-2 hover:bg-white/20 rounded-lg transition">
@@ -390,15 +400,15 @@ const resetTransferForm = () => {
       {/* Acciones Rápidas */}
       <div className="px-4 mt-6 grid grid-cols-3 gap-4">
         <button onClick={() => setShowTransfer(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-          <Send className="text-purple-600" size={28} />
+          <Send className="text-blue-700" size={28} />
           <span className="text-sm font-semibold text-gray-700">Transferir</span>
         </button>
         <button onClick={() => setShowTarjeta(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-          <CreditCard className="text-blue-600" size={28} />
+          <CreditCard className="text-blue-500" size={28} />
           <span className="text-sm font-semibold text-gray-700">Tarjeta</span>
         </button>
         <button onClick={() => setShowCuenta(true)} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col items-center gap-2">
-          <Wallet className="text-red-600" size={28} />
+          <Wallet className="text-blue-900" size={28} />
           <span className="text-sm font-semibold text-gray-700">Cuenta</span>
         </button>
       </div>
@@ -410,15 +420,15 @@ const resetTransferForm = () => {
           <div className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-                  <CreditCard className="text-purple-600" size={22} />
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <CreditCard className="text-blue-700" size={22} />
                 </div>
                 <div>
                   <p className="font-bold text-gray-900">Tarjeta de Crédito</p>
                   <p className="text-gray-500 text-xs">Hasta $50,000 de línea de crédito</p>
                 </div>
               </div>
-              <button onClick={() => solicitarCredito('Tarjeta de Crédito')} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition">
+              <button onClick={() => solicitarCredito('Tarjeta de Crédito')} className="px-4 py-2 bg-blue-700 text-white rounded-lg text-sm font-semibold hover:bg-blue-800 transition">
                 Solicitar
               </button>
             </div>
@@ -427,15 +437,15 @@ const resetTransferForm = () => {
           <div className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <Wallet className="text-green-600" size={22} />
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Wallet className="text-blue-600" size={22} />
                 </div>
                 <div>
                   <p className="font-bold text-gray-900">Crédito de Nómina</p>
                   <p className="text-gray-500 text-xs">Tasa preferencial para empleados</p>
                 </div>
               </div>
-              <button onClick={() => solicitarCredito('Crédito de Nómina')} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition">
+              <button onClick={() => solicitarCredito('Crédito de Nómina')} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition">
                 Solicitar
               </button>
             </div>
@@ -444,15 +454,15 @@ const resetTransferForm = () => {
           <div className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                  <ArrowUpRight className="text-red-600" size={22} />
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <ArrowUpRight className="text-blue-900" size={22} />
                 </div>
                 <div>
                   <p className="font-bold text-gray-900">Crédito Automotriz</p>
                   <p className="text-gray-500 text-xs">Financia tu auto nuevo o seminuevo</p>
                 </div>
               </div>
-              <button onClick={() => solicitarCredito('Crédito Automotriz')} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition">
+              <button onClick={() => solicitarCredito('Crédito Automotriz')} className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-semibold hover:bg-blue-950 transition">
                 Solicitar
               </button>
             </div>
@@ -467,7 +477,7 @@ const resetTransferForm = () => {
           <p className="text-gray-500 text-center py-8">Cargando...</p>
         ) : transacciones.length > 0 ? (
           <div className="space-y-3">
-           {transacciones.map(tx => {
+            {transacciones.map(tx => {
               const esEmisor = tx.emisorId === usuario._id;
               return (
                 <div key={tx._id} onClick={() => { setTxDetalle(tx); setShowDetalleTx(true); }} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition cursor-pointer">
@@ -493,7 +503,7 @@ const resetTransferForm = () => {
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                     <p className="text-gray-400 text-xs font-mono">Ref: {tx._id.slice(-8).toUpperCase()}</p>
-                    <button onClick={(e) => { e.stopPropagation(); abrirAclaracion(tx); }} className="flex items-center gap-1 text-xs text-purple-600 font-semibold hover:text-purple-800 transition">
+                    <button onClick={(e) => { e.stopPropagation(); abrirAclaracion(tx); }} className="flex items-center gap-1 text-xs text-blue-700 font-semibold hover:text-blue-900 transition">
                       <AlertCircle size={14} /> Aclarar/Reportar
                     </button>
                   </div>
@@ -507,97 +517,98 @@ const resetTransferForm = () => {
       </div>
 
       {/* Modal Transferencia */}
-{showTransfer && (
-  <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-    <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
-      <h3 className="text-2xl font-bold mb-6 text-gray-900">Transferencia</h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Número de Cuenta</label>
-          <input
-            type="text"
-            value={numeroCuentaDestino}
-            onChange={(e) => setNumeroCuentaDestino(e.target.value)}
-            placeholder="Ej: 1234567890"
-            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-          />
+      {showTransfer && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-6 text-gray-900">Transferencia</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Número de Cuenta</label>
+                <input
+                  type="text"
+                  value={numeroCuentaDestino}
+                  onChange={(e) => setNumeroCuentaDestino(e.target.value)}
+                  placeholder="Ej: 1234567890"
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Beneficiario</label>
+                <input
+                  type="text"
+                  value={nombreBeneficiario}
+                  onChange={(e) => setNombreBeneficiario(e.target.value)}
+                  placeholder="Ej: Juan Pérez"
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Banco</label>
+                <select
+                  value={bancoDestino}
+                  onChange={(e) => setBancoDestino(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-white"
+                >
+                  <option value={NOMBRE_APP}>{NOMBRE_APP}</option>
+                  <option value="BBVA">BBVA</option>
+                  <option value="Banorte">Banorte</option>
+                  <option value="Santander">Santander</option>
+                  <option value="HSBC">HSBC</option>
+                  <option value="Citibanamex">Citibanamex</option>
+                  <option value="Scotiabank">Scotiabank</option>
+                  <option value="Banco Azteca">Banco Azteca</option>
+                  <option value="Inbursa">Inbursa</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Concepto</label>
+                <input
+                  type="text"
+                  value={conceptoTransferencia}
+                  onChange={(e) => setConceptoTransferencia(e.target.value)}
+                  placeholder="Ej: Pago de renta"
+                  maxLength={40}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Monto</label>
+                <input
+                  type="number"
+                  value={monto}
+                  onChange={(e) => setMonto(e.target.value)}
+                  placeholder="$0.00"
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetTransferForm}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={realizar}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-800 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-900 hover:to-blue-700 disabled:opacity-50 transition"
+                >
+                  {loading ? 'Procesando...' : 'Transferir'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Beneficiario</label>
-          <input
-            type="text"
-            value={nombreBeneficiario}
-            onChange={(e) => setNombreBeneficiario(e.target.value)}
-            placeholder="Ej: Juan Pérez"
-            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Banco</label>
-          <select
-            value={bancoDestino}
-            onChange={(e) => setBancoDestino(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-white"
-          >
-            <option value="Banbajío">Banbajío</option>
-            <option value="BBVA">BBVA</option>
-            <option value="Banorte">Banorte</option>
-            <option value="Santander">Santander</option>
-            <option value="HSBC">HSBC</option>
-            <option value="Citibanamex">Citibanamex</option>
-            <option value="Scotiabank">Scotiabank</option>
-            <option value="Banco Azteca">Banco Azteca</option>
-            <option value="Inbursa">Inbursa</option>
-            <option value="Otro">Otro</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Concepto</label>
-          <input
-            type="text"
-            value={conceptoTransferencia}
-            onChange={(e) => setConceptoTransferencia(e.target.value)}
-            placeholder="Ej: Pago de renta"
-            maxLength={40}
-            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Monto</label>
-          <input
-            type="number"
-            value={monto}
-            onChange={(e) => setMonto(e.target.value)}
-            placeholder="$0.00"
-            className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-          />
-        </div>
-        <div className="flex gap-3 pt-4">
-          <button
-            onClick={resetTransferForm}
-            className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={realizar}
-            disabled={loading}
-            className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
-          >
-            {loading ? 'Procesando...' : 'Transferir'}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
       {/* Modal Tarjeta Virtual */}
       {showTarjeta && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 w-full max-w-md">
             <h3 className="text-2xl font-bold mb-6 text-gray-900 text-center">Mi Tarjeta Virtual</h3>
 
-            <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-2xl mb-6">
+            <div className="bg-gradient-to-br from-blue-900 via-blue-700 to-blue-500 rounded-2xl p-8 text-white shadow-2xl mb-6">
               <div className="flex justify-between items-start mb-12">
                 <div>
                   <p className="text-blue-100 text-sm mb-2">Número de Tarjeta</p>
@@ -639,7 +650,7 @@ const resetTransferForm = () => {
               <button onClick={() => setShowTarjeta(false)} className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition">
                 Cerrar
               </button>
-              <button onClick={() => navigator.clipboard.writeText(usuario.tarjetaVirtual?.numero || '')} className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2">
+              <button onClick={() => navigator.clipboard.writeText(usuario.tarjetaVirtual?.numero || '')} className="flex-1 py-3 bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-800 transition flex items-center justify-center gap-2">
                 <Copy size={18} /> Copiar
               </button>
             </div>
@@ -659,24 +670,24 @@ const resetTransferForm = () => {
             </div>
 
             <div className="space-y-4">
-              <div className="bg-purple-50 rounded-xl p-4">
+              <div className="bg-blue-50 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Nombre del titular</p>
                 <p className="font-bold text-gray-900 text-lg">{usuario.nombre}</p>
               </div>
 
-              <div className="bg-purple-50 rounded-xl p-4">
+              <div className="bg-blue-50 rounded-xl p-4">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Número de Cuenta</p>
                     <p className="font-mono font-bold text-gray-900 text-lg">{usuario.numeroCuenta}</p>
                   </div>
-                  <button onClick={copiarCuenta} className="p-2 hover:bg-purple-100 rounded-lg transition">
-                    {copied ? <Check size={20} className="text-green-600" /> : <Copy size={20} className="text-purple-600" />}
+                  <button onClick={copiarCuenta} className="p-2 hover:bg-blue-100 rounded-lg transition">
+                    {copied ? <Check size={20} className="text-green-600" /> : <Copy size={20} className="text-blue-700" />}
                   </button>
                 </div>
               </div>
 
-              <div className="bg-purple-50 rounded-xl p-4">
+              <div className="bg-blue-50 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Cliente desde</p>
                 <p className="font-semibold text-gray-900">{usuario.createdAt ? formatearFechaCorta(usuario.createdAt) : 'N/A'}</p>
               </div>
@@ -686,7 +697,7 @@ const resetTransferForm = () => {
                 className="w-full flex items-center justify-between bg-white border-2 border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition"
               >
                 <div className="flex items-center gap-3">
-                  <FileText className="text-purple-600" size={22} />
+                  <FileText className="text-blue-700" size={22} />
                   <span className="font-semibold text-gray-900">Ver Estado de Cuenta</span>
                 </div>
                 <ChevronRight className="text-gray-400" size={20} />
@@ -707,12 +718,12 @@ const resetTransferForm = () => {
               </button>
             </div>
 
-            <div className="bg-gradient-to-r from-purple-600 to-red-600 rounded-xl p-4 text-white mb-4">
-              <p className="text-xs text-purple-100">Titular: {usuario.nombre}</p>
-              <p className="text-xs text-purple-100">Cuenta: {usuario.numeroCuenta}</p>
-              <p className="text-xs text-purple-100 mt-1">Periodo: {formatearFechaCorta(usuario.createdAt || new Date())} - {formatearFechaCorta(new Date())}</p>
+            <div className="bg-gradient-to-r from-blue-800 to-blue-600 rounded-xl p-4 text-white mb-4">
+              <p className="text-xs text-blue-100">Titular: {usuario.nombre}</p>
+              <p className="text-xs text-blue-100">Cuenta: {usuario.numeroCuenta}</p>
+              <p className="text-xs text-blue-100 mt-1">Periodo: {formatearFechaCorta(usuario.createdAt || new Date())} - {formatearFechaCorta(new Date())}</p>
               <div className="mt-3 pt-3 border-t border-white/20">
-                <p className="text-purple-100 text-xs">Saldo Actual</p>
+                <p className="text-blue-100 text-xs">Saldo Actual</p>
                 <p className="text-2xl font-bold">{formatearDinero(usuario.saldo)}</p>
               </div>
             </div>
@@ -742,78 +753,94 @@ const resetTransferForm = () => {
           </div>
         </div>
       )}
-{/* Modal Detalle de Transacción */}
-{showDetalleTx && txDetalle && (
-  <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowDetalleTx(false)}>
-    <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-2xl font-bold text-gray-900">Detalle de Transacción</h3>
-        <button onClick={() => setShowDetalleTx(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-          <X size={24} className="text-gray-500" />
-        </button>
-      </div>
 
-      {(() => {
-        const esEmisor = txDetalle.emisorId === usuario._id;
-        return (
-          <>
-            <div className={`rounded-2xl p-6 text-white mb-6 ${esEmisor ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-green-500 to-green-600'}`}>
-              <p className="text-white/80 text-sm mb-1">{esEmisor ? 'Enviaste' : 'Recibiste'}</p>
-              <p className="text-3xl font-bold">{esEmisor ? '-' : '+'}{formatearDinero(txDetalle.monto)}</p>
-              <span className={`inline-block mt-3 text-xs px-3 py-1 rounded-full ${getEstadoColor(txDetalle.estado)}`}>
-                {getEstadoTexto(txDetalle.estado)}
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                <span className="text-gray-500 text-sm">{esEmisor ? 'Beneficiario' : 'Remitente'}</span>
-                <span className="font-semibold text-gray-900">{esEmisor ? txDetalle.receptorNombre : txDetalle.emisor.nombre}</span>
-              </div>
-
-              {esEmisor && (
-                <>
-                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="text-gray-500 text-sm">Número de Cuenta</span>
-                    <span className="font-mono font-semibold text-gray-900">{txDetalle.receptorNumeroCuenta}</span>
+      {/* Modal Detalle de Transacción - Estilo Ticket */}
+      {showDetalleTx && txDetalle && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowDetalleTx(false)}>
+          <div className="bg-gray-50 w-full rounded-t-3xl max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {(() => {
+              const esEmisor = txDetalle.emisorId === usuario._id;
+              return (
+                <div className="p-6 pb-10">
+                  <div className="flex justify-end">
+                    <button onClick={() => setShowDetalleTx(false)} className="p-2 hover:bg-gray-200 rounded-lg">
+                      <X size={22} className="text-gray-500" />
+                    </button>
                   </div>
-                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="text-gray-500 text-sm">Banco</span>
-                    <span className="font-semibold text-gray-900">{txDetalle.bancoDestino || 'Banbajío'}</span>
-                  </div>
-                </>
-              )}
 
-              {txDetalle.descripcion && (
-                <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                  <span className="text-gray-500 text-sm">Concepto</span>
-                  <span className="font-semibold text-gray-900">{txDetalle.descripcion}</span>
+                  <div className="flex flex-col items-center text-center mb-6 -mt-2">
+                    <div className="w-20 h-20 rounded-full bg-white shadow flex items-center justify-center mb-4">
+                      <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center">
+                        <CheckCircle2 className="text-white" size={32} />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900">
+                      {txDetalle.estado === 'pendiente' ? '¡Tu transferencia está en proceso!' : '¡Tu transferencia fue exitosa!'}
+                    </h3>
+                  </div>
+
+                  <p className="text-center text-gray-500 font-semibold mb-1">{esEmisor ? 'Envié' : 'Recibí'}</p>
+                  <p className="text-center text-4xl font-bold text-gray-900 mb-6">
+                    {formatearDinero(txDetalle.monto)} <span className="text-lg text-gray-400 font-semibold">MXN</span>
+                  </p>
+
+                  <div className="bg-white rounded-2xl shadow p-5 mb-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center">
+                        <p className="text-xs text-gray-400 mb-2">Desde</p>
+                        <div className="w-12 h-12 mx-auto rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                          <Wallet className="text-blue-700" size={22} />
+                        </div>
+                        <p className="font-bold text-gray-900 text-sm">{esEmisor ? usuario.nombre : txDetalle.emisor.nombre}</p>
+                        <p className="text-xs text-gray-400 mt-1">Cuenta ****{(esEmisor ? usuario.numeroCuenta : txDetalle.emisor.numeroCuenta || '').slice(-4)}</p>
+                      </div>
+                      <div className="text-center border-l border-gray-100">
+                        <p className="text-xs text-gray-400 mb-2">Para</p>
+                        <div className="w-12 h-12 mx-auto rounded-full bg-gray-200 flex items-center justify-center mb-2">
+                          <ArrowUpRight className="text-gray-600" size={22} />
+                        </div>
+                        <p className="font-bold text-gray-900 text-sm">{esEmisor ? txDetalle.receptorNombre : usuario.nombre}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {esEmisor ? (txDetalle.bancoDestino || NOMBRE_APP) : NOMBRE_APP} ****{(esEmisor ? txDetalle.receptorNumeroCuenta : usuario.numeroCuenta || '').slice(-4)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow p-5 space-y-3">
+                    {txDetalle.descripcion && (
+                      <div className="flex justify-between items-start">
+                        <span className="text-gray-400 text-sm">Concepto</span>
+                        <span className="text-gray-900 font-semibold text-sm text-right max-w-[60%]">{txDetalle.descripcion}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                      <span className="text-gray-400 text-sm">Estado</span>
+                      <span className={`text-xs px-2 py-1 rounded-full ${getEstadoColor(txDetalle.estado)}`}>{getEstadoTexto(txDetalle.estado)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Fecha</span>
+                      <span className="text-gray-900 font-semibold text-sm">{new Date(txDetalle.createdAt).toLocaleString('es-MX')}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Referencia</span>
+                      <span className="text-gray-900 font-mono font-semibold text-sm">{txDetalle._id.slice(-8).toUpperCase()}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => { setShowDetalleTx(false); abrirAclaracion(txDetalle); }}
+                    className="w-full mt-6 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-100 transition flex items-center justify-center gap-2"
+                  >
+                    <AlertCircle size={18} /> Aclarar este movimiento
+                  </button>
                 </div>
-              )}
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
-              <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                <span className="text-gray-500 text-sm">Fecha</span>
-                <span className="font-semibold text-gray-900">{new Date(txDetalle.createdAt).toLocaleString('es-MX')}</span>
-              </div>
-
-              <div className="flex justify-between items-center py-3">
-                <span className="text-gray-500 text-sm">Referencia</span>
-                <span className="font-mono font-semibold text-gray-900">{txDetalle._id.slice(-8).toUpperCase()}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => { setShowDetalleTx(false); abrirAclaracion(txDetalle); }}
-              className="w-full mt-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition flex items-center justify-center gap-2"
-            >
-              <AlertCircle size={18} /> Aclarar este movimiento
-            </button>
-          </>
-        );
-      })()}
-    </div>
-  </div>
-)}
       {/* Modal Aclaración */}
       {showAclaracion && txSeleccionada && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
@@ -832,11 +859,11 @@ const resetTransferForm = () => {
               onChange={(e) => setDescripcionAclaracion(e.target.value)}
               placeholder="Describe brevemente el problema con este movimiento..."
               rows={4}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none mb-4"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none mb-4"
             />
 
             <div className="bg-blue-50 rounded-lg p-4 mb-6 flex items-center gap-3">
-              <Phone className="text-blue-600" size={22} />
+              <Phone className="text-blue-700" size={22} />
               <div>
                 <p className="text-xs text-blue-700">¿Necesitas ayuda inmediata? Llama a soporte:</p>
                 <p className="font-bold text-blue-900">{telefonoSoporte}</p>
@@ -853,7 +880,7 @@ const resetTransferForm = () => {
               <button
                 onClick={enviarAclaracion}
                 disabled={loading}
-                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+                className="flex-1 py-3 bg-gradient-to-r from-blue-800 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-900 hover:to-blue-700 disabled:opacity-50 transition"
               >
                 {loading ? 'Enviando...' : 'Enviar Aclaración'}
               </button>
@@ -868,7 +895,7 @@ const resetTransferForm = () => {
           <div className="bg-white rounded-2xl p-8 w-full max-w-sm text-center">
             {creditoProcesando ? (
               <>
-                <div className="w-16 h-16 mx-auto mb-4 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">Analizando tu solicitud</h3>
                 <p className="text-gray-500 text-sm">Estamos evaluando tu perfil para {creditoNombre}...</p>
               </>
@@ -881,7 +908,7 @@ const resetTransferForm = () => {
                 <p className="text-gray-500 text-sm mb-6">Por el momento no eres apto para {creditoNombre}. Intenta nuevamente más adelante.</p>
                 <button
                   onClick={() => setShowCreditoModal(false)}
-                  className="w-full py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 transition"
+                  className="w-full py-3 bg-gradient-to-r from-blue-800 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-900 hover:to-blue-700 transition"
                 >
                   Entendido
                 </button>
@@ -1146,9 +1173,9 @@ function AdminDashboard({ usuario, logout, token }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-gray-50 pb-12">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-gray-50 pb-12">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-red-600 text-white p-6">
+      <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Panel Admin</h1>
           <button onClick={logout} className="p-2 hover:bg-white/20 rounded-lg transition">
@@ -1162,25 +1189,25 @@ function AdminDashboard({ usuario, logout, token }) {
       <div className="px-4 mt-6 flex gap-2 flex-wrap">
         <button
           onClick={() => setTab('clientes')}
-          className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'clientes' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'clientes' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700'}`}
         >
           Clientes ({clientes.length})
         </button>
         <button
           onClick={() => setTab('transacciones')}
-          className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'transacciones' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'transacciones' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700'}`}
         >
           Transacciones ({transacciones.length})
         </button>
         <button
           onClick={() => setTab('aclaraciones')}
-          className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'aclaraciones' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'aclaraciones' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700'}`}
         >
           Aclaraciones ({aclaraciones.filter(a => a.estado === 'pendiente').length})
         </button>
         <button
           onClick={() => setTab('configuracion')}
-          className={`px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2 ${tab === 'configuracion' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700'}`}
+          className={`px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2 ${tab === 'configuracion' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700'}`}
         >
           <Settings size={16} /> Config
         </button>
@@ -1192,7 +1219,7 @@ function AdminDashboard({ usuario, logout, token }) {
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setShowNuevo(true)}
-              className="flex-1 bg-gradient-to-r from-purple-600 to-red-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:from-purple-700 hover:to-red-700 transition"
+              className="flex-1 bg-gradient-to-r from-blue-800 to-blue-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:from-blue-900 hover:to-blue-700 transition"
             >
               <Plus size={20} /> Crear Cliente
             </button>
@@ -1216,7 +1243,7 @@ function AdminDashboard({ usuario, logout, token }) {
                       <p className="text-gray-500 text-sm">{c.email}</p>
                       <p className="text-gray-400 text-xs font-mono mt-1">Cuenta: {c.numeroCuenta}</p>
                     </div>
-                    <p className="font-bold text-purple-600 text-lg">{formatearDinero(c.saldo)}</p>
+                    <p className="font-bold text-blue-700 text-lg">{formatearDinero(c.saldo)}</p>
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => abrirEditar(c)} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition flex items-center justify-center gap-2">
@@ -1284,7 +1311,7 @@ function AdminDashboard({ usuario, logout, token }) {
                   </div>
                   <p className="text-gray-700 text-sm bg-gray-50 rounded-lg p-3 mb-3">{ac.descripcion}</p>
                   {ac.estado === 'pendiente' && (
-                    <button onClick={() => marcarRevisado(ac._id)} className="w-full py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition">
+                    <button onClick={() => marcarRevisado(ac._id)} className="w-full py-2 bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-800 transition">
                       Marcar como Revisado
                     </button>
                   )}
@@ -1308,12 +1335,12 @@ function AdminDashboard({ usuario, logout, token }) {
               value={telefonoSoporte}
               onChange={(e) => setTelefonoSoporte(e.target.value)}
               placeholder="01-800-000-0000"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none mb-4"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none mb-4"
             />
             <button
               onClick={guardarTelefono}
               disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+              className="w-full py-3 bg-gradient-to-r from-blue-800 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-900 hover:to-blue-700 disabled:opacity-50 transition"
             >
               {loading ? 'Guardando...' : 'Guardar Cambios'}
             </button>
@@ -1332,28 +1359,28 @@ function AdminDashboard({ usuario, logout, token }) {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder="Nombre completo"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
               />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Email"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
               />
               <input
                 type="password"
                 value={contraseña}
                 onChange={(e) => setContraseña(e.target.value)}
                 placeholder="Contraseña"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
               />
               <input
                 type="number"
                 value={saldo}
                 onChange={(e) => setSaldo(e.target.value)}
                 placeholder="Saldo inicial"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
               />
               <div className="flex gap-3 pt-4">
                 <button
@@ -1365,7 +1392,7 @@ function AdminDashboard({ usuario, logout, token }) {
                 <button
                   onClick={crear}
                   disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-800 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-900 hover:to-blue-700 disabled:opacity-50 transition"
                 >
                   {loading ? 'Creando...' : 'Crear'}
                 </button>
@@ -1389,7 +1416,7 @@ function AdminDashboard({ usuario, logout, token }) {
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej: Juan Pérez"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-gray-50"
                 />
               </div>
 
@@ -1400,7 +1427,7 @@ function AdminDashboard({ usuario, logout, token }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Ej: juan@email.com"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-gray-50"
                 />
               </div>
 
@@ -1411,7 +1438,7 @@ function AdminDashboard({ usuario, logout, token }) {
                   value={saldo}
                   onChange={(e) => setSaldo(e.target.value)}
                   placeholder="Ej: 5000"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-gray-50"
                 />
               </div>
 
@@ -1422,7 +1449,7 @@ function AdminDashboard({ usuario, logout, token }) {
                   value={numeroCuenta}
                   onChange={(e) => setNumeroCuenta(e.target.value)}
                   placeholder="Ej: 1234567890"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none bg-gray-50 font-mono"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-gray-50 font-mono"
                 />
                 <p className="text-xs text-gray-500 mt-1">Actual: {clienteEditando?.numeroCuenta}</p>
               </div>
@@ -1450,7 +1477,7 @@ function AdminDashboard({ usuario, logout, token }) {
                 <button
                   onClick={editarCliente}
                   disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-red-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-red-700 disabled:opacity-50 transition"
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-800 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-900 hover:to-blue-700 disabled:opacity-50 transition"
                 >
                   💾 Guardar Cambios
                 </button>
@@ -1469,7 +1496,7 @@ function AdminDashboard({ usuario, logout, token }) {
               <select
                 value={clienteSelectId}
                 onChange={(e) => setClienteSelectId(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
               >
                 <option value="">Selecciona cliente</option>
                 {clientes.map(c => (
@@ -1481,7 +1508,7 @@ function AdminDashboard({ usuario, logout, token }) {
                 value={montoDeposito}
                 onChange={(e) => setMontoDeposito(e.target.value)}
                 placeholder="Monto a depositar"
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
               />
               <div className="flex gap-3 pt-4">
                 <button
