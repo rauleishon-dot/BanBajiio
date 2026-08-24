@@ -33,7 +33,7 @@ export default function BanbajioApp() {
       if (data._id) {
         setUsuario(data);
         setToken(t);
-        setPantalla(data.rol === 'admin' ? 'adminDashboard' : 'clienteDashboard');
+        setPantalla(data.rol === 'admin' || data.rol === 'master' ? 'adminDashboard' : 'clienteDashboard');
       } else {
         logout();
       }
@@ -62,7 +62,7 @@ export default function BanbajioApp() {
         sessionStorage.setItem('token', data.token);
         setToken(data.token);
         setUsuario(data.usuario);
-        setPantalla(data.usuario.rol === 'admin' ? 'adminDashboard' : 'clienteDashboard');
+        setPantalla(data.usuario.rol === 'admin' || data.usuario.rol === 'master' ? 'adminDashboard' : 'clienteDashboard');
       } else {
         alert('Error: ' + (data.error || 'No se pudo iniciar sesión'));
       }
