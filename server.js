@@ -29,6 +29,7 @@ const usuarioSchema = new mongoose.Schema({
     ultimosDigitos: String
   },
   rol: { type: String, enum: ['master', 'admin', 'cliente'], default: 'cliente' },
+  esDemo: { type: Boolean, default: false },
   creadoPor: { type: mongoose.Schema.Types.ObjectId, default: null }, // admin/master que creó este cliente
   createdAt: { type: Date, default: Date.now }
 });
@@ -147,6 +148,52 @@ function esDuenoDeCliente(req, cliente) {
 }
 
 // ===== RUTAS PÚBLICAS =====
+const DEMO_SALDO_CLIENTE = 55000;
+
+// Deja la cuenta demo cliente exactamente como el primer día: mismo saldo,
+// sin historial de transacciones propio.
+async function reiniciarDemoCliente(usuario) {
+  await Transaccion.deleteMany({
+    $or: [{ emisorId: usuario._id }, { receptorNumeroCuenta: usuario.numeroCuenta }]
+  });
+  usuario.saldo = DEMO_SALDO_CLIENTE;
+  await usuario.save();
+
+  await Transaccion.create({
+    emisorId: null,
+    emisor: { nombre: 'Depósito Inicial', numeroCuenta: generarDigitos(16) },
+    receptorNumeroCuenta: usuario.numeroCuenta,
+    receptorNombre: usuario.nombre,
+    monto: DEMO_SALDO_CLIENTE,
+    descripcion: 'Depósito inicial de apertura de cuenta',
+    tipo: 'deposito',
+    cuentaOrigenExterna: generarDigitos(16),
+    sucursal: '0423',
+    referencia: generarDigitos(7),
+    saldoAnterior: 0,
+    saldoPosterior: DEMO_SALDO_CLIENTE,
+    estado: 'completada'
+  });
+}
+
+// Borra todos los clientes y transacciones que se hayan creado en la sesión
+// demo anterior del admin, para que cada quien empiece desde cero.
+async function reiniciarDemoAdmin(usuario) {
+  const clientesDemo = await Usuario.find({ creadoPor: usuario._id });
+  const idsClientes = clientesDemo.map(c => c._id);
+  const cuentasClientes = clientesDemo.map(c => c.numeroCuenta);
+
+  if (idsClientes.length > 0) {
+    await Transaccion.deleteMany({
+      $or: [
+        { emisorId: { $in: idsClientes } },
+        { receptorNumeroCuenta: { $in: cuentasClientes } }
+      ]
+    });
+    await Usuario.deleteMany({ _id: { $in: idsClientes } });
+  }
+}
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, contraseña } = req.body;
@@ -154,6 +201,12 @@ app.post('/api/auth/login', async (req, res) => {
     if (!usuario || !await bcrypt.compare(contraseña, usuario.contraseña)) {
       return res.status(401).json({ error: 'Email o contraseña incorrectos' });
     }
+
+    if (usuario.esDemo) {
+      if (usuario.rol === 'cliente') await reiniciarDemoCliente(usuario);
+      if (usuario.rol === 'admin') await reiniciarDemoAdmin(usuario);
+    }
+
     const token = generarToken(usuario);
     res.json({
       token,
@@ -165,6 +218,7 @@ app.post('/api/auth/login', async (req, res) => {
         numeroCuenta: usuario.numeroCuenta,
         tarjetaVirtual: usuario.tarjetaVirtual,
         rol: usuario.rol,
+        esDemo: usuario.esDemo,
         createdAt: usuario.createdAt
       }
     });
@@ -680,34 +734,57 @@ app.delete('/api/master/admins/:id', middleware, async (req, res) => {
   }
 });
 
-// ===== ADMIN Y MASTER POR DEFECTO =====
-// Las credenciales se leen de variables de entorno (Railway) para no dejarlas
-// escritas en el código. Si no configuras las variables, se usan valores por
-// defecto SOLO para que la app no truene, pero debes cambiarlas cuanto antes.
-async function crearAdminPorDefecto() {
-  const emailAdmin = process.env.ADMIN_EMAIL || 'admin@banbajio.com';
-  const passAdmin = process.env.ADMIN_PASSWORD || 'Admin123!';
+// ===== LIMPIEZA DEL ADMIN ANTIGUO =====
+// Elimina el admin de pruebas que se creaba automáticamente antes
+// (admin@banbajio.com). Solo se ejecuta una vez, si existe.
+async function eliminarAdminAntiguo() {
+  const resultado = await Usuario.deleteOne({ email: 'admin@banbajio.com', rol: 'admin' });
+  if (resultado.deletedCount > 0) {
+    console.log('🗑️ Admin antiguo eliminado');
+  }
+}
 
-  const adminExiste = await Usuario.findOne({ email: emailAdmin });
-  if (!adminExiste) {
-    const hashedPassword = await bcrypt.hash(passAdmin, 10);
+// ===== CUENTAS DEMO (se reinician solas cada vez que alguien inicia sesión) =====
+async function crearDemoAdminPorDefecto() {
+  const email = process.env.DEMO_ADMIN_EMAIL || 'demo.admin@novoopciones.com';
+  const password = process.env.DEMO_ADMIN_PASSWORD || 'DemoAdmin2026!';
+
+  const existe = await Usuario.findOne({ email });
+  if (!existe) {
+    const hashedPassword = await bcrypt.hash(password, 10);
     await Usuario.create({
-      nombre: 'Administrador',
-      email: emailAdmin,
+      nombre: 'Admin Demo',
+      email,
       contraseña: hashedPassword,
       saldo: 0,
-      numeroCuenta: '0000000000',
-      tarjetaVirtual: {
-        numero: '4532000000000000',
-        cvv: '000',
-        nombreTitular: 'ADMINISTRADOR',
-        fechaExpedicion: new Date(),
-        fechaVencimiento: new Date(new Date().getFullYear() + 5, new Date().getMonth(), new Date().getDate()),
-        ultimosDigitos: '0000'
-      },
-      rol: 'admin'
+      numeroCuenta: generarNumeroCuenta().toString(),
+      tarjetaVirtual: generarTarjetaVirtual('Admin Demo'),
+      rol: 'admin',
+      esDemo: true
     });
-    console.log('✅ Admin creado');
+    console.log('✅ Admin Demo creado');
+  }
+}
+
+async function crearDemoClientePorDefecto() {
+  const email = process.env.DEMO_CLIENTE_EMAIL || 'demo.cliente@novoopciones.com';
+  const password = process.env.DEMO_CLIENTE_PASSWORD || 'DemoCliente2026!';
+
+  const existe = await Usuario.findOne({ email });
+  if (!existe) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const numeroCuenta = generarNumeroCuenta().toString();
+    await Usuario.create({
+      nombre: 'Cliente Demo',
+      email,
+      contraseña: hashedPassword,
+      saldo: DEMO_SALDO_CLIENTE,
+      numeroCuenta,
+      tarjetaVirtual: generarTarjetaVirtual('Cliente Demo'),
+      rol: 'cliente',
+      esDemo: true
+    });
+    console.log('✅ Cliente Demo creado');
   }
 }
 
@@ -738,7 +815,9 @@ async function crearMasterPorDefecto() {
   }
 }
 
-crearAdminPorDefecto();
+eliminarAdminAntiguo();
+crearDemoAdminPorDefecto();
+crearDemoClientePorDefecto();
 crearMasterPorDefecto();
 
 const PORT = process.env.PORT || 5000;

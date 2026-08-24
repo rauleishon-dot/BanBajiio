@@ -13,6 +13,31 @@ function formatearFechaCorta(date) {
   return new Date(date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Marca de agua que se muestra sobre TODO (incluyendo modales, tickets,
+// tarjeta virtual, etc.) solo para las cuentas demo. pointer-events-none
+// para que no estorbe al usar la app.
+function MarcaAguaDemo() {
+  const celdas = Array.from({ length: 42 });
+  return (
+    <div className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 bg-yellow-400 text-yellow-950 text-center text-xs font-bold py-1 tracking-wide">
+        🧪 MODO DEMOSTRACIÓN — la información se reinicia cada vez que inicias sesión
+      </div>
+      <div className="w-full h-full flex flex-wrap content-around justify-around">
+        {celdas.map((_, i) => (
+          <span
+            key={i}
+            className="text-gray-500 opacity-20 font-black text-sm whitespace-nowrap select-none"
+            style={{ transform: 'rotate(-30deg)' }}
+          >
+            DEMOSTRACIÓN
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function BanbajioApp() {
   const [pantalla, setPantalla] = useState('login');
   const [usuario, setUsuario] = useState(null);
@@ -80,10 +105,18 @@ export default function BanbajioApp() {
 
 // ============ LOGIN SCREEN ============
 function LoginScreen({ login }) {
-  const [email, setEmail] = useState('admin@banbajio.com');
-  const [contraseña, setContraseña] = useState('Admin123!');
+  const [email, setEmail] = useState('');
+  const [contraseña, setContraseña] = useState('');
   const [mostrar, setMostrar] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const DEMO_ADMIN = { email: 'demo.admin@novoopciones.com', pass: 'DemoAdmin2026!' };
+  const DEMO_CLIENTE = { email: 'demo.cliente@novoopciones.com', pass: 'DemoCliente2026!' };
+
+  const usarDemo = (cuenta) => {
+    setEmail(cuenta.email);
+    setContraseña(cuenta.pass);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -148,10 +181,36 @@ function LoginScreen({ login }) {
           </button>
         </form>
 
-        <div className="mt-6 bg-white/10 backdrop-blur-md rounded-xl p-4 text-white text-sm">
-          <p className="font-semibold mb-2">Demo Admin:</p>
-          <p>📧 admin@banbajio.com</p>
-          <p>🔑 Admin123!</p>
+        <div className="mt-6 bg-white/10 backdrop-blur-md rounded-xl p-4 text-white text-sm space-y-4">
+          <p className="font-semibold text-center">🧪 Prueba la demo (se reinicia sola)</p>
+
+          <div className="bg-white/10 rounded-lg p-3">
+            <p className="font-semibold mb-1">👤 Cuenta Admin Demo</p>
+            <p>📧 {DEMO_ADMIN.email}</p>
+            <p>🔑 {DEMO_ADMIN.pass}</p>
+            <button
+              type="button"
+              onClick={() => usarDemo(DEMO_ADMIN)}
+              className="mt-2 w-full py-2 bg-white/20 hover:bg-white/30 rounded-lg font-semibold transition"
+            >
+              Usar esta cuenta
+            </button>
+          </div>
+
+          <div className="bg-white/10 rounded-lg p-3">
+            <p className="font-semibold mb-1">💳 Cuenta Cliente Demo</p>
+            <p>📧 {DEMO_CLIENTE.email}</p>
+            <p>🔑 {DEMO_CLIENTE.pass}</p>
+            <button
+              type="button"
+              onClick={() => usarDemo(DEMO_CLIENTE)}
+              className="mt-2 w-full py-2 bg-white/20 hover:bg-white/30 rounded-lg font-semibold transition"
+            >
+              Usar esta cuenta
+            </button>
+          </div>
+
+          <p className="text-blue-200 text-xs text-center">Cada vez que inicias sesión en estas cuentas, la información vuelve a su estado original.</p>
         </div>
 
         <p className="text-center text-blue-300 text-xs mt-6">{RAZON_SOCIAL}</p>
@@ -345,6 +404,7 @@ function ClienteDashboard({ usuario, logout, token }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-gray-50 pb-24">
+      {usuario.esDemo && <MarcaAguaDemo />}
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-b-3xl shadow-lg">
         <div className="flex justify-between items-start mb-8">
@@ -1424,6 +1484,7 @@ function AdminDashboard({ usuario, logout, token, esMaster }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-gray-50 pb-12">
+      {usuario.esDemo && <MarcaAguaDemo />}
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6">
         <div className="flex justify-between items-center mb-4">
