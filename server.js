@@ -190,6 +190,7 @@ async function reiniciarDemoAdmin(usuario) {
         { receptorNumeroCuenta: { $in: cuentasClientes } }
       ]
     });
+    await Aclaracion.deleteMany({ clienteId: { $in: idsClientes } });
     await Usuario.deleteMany({ _id: { $in: idsClientes } });
   }
 }
@@ -341,7 +342,15 @@ app.post('/api/aclaracion', middleware, async (req, res) => {
 app.get('/api/admin/aclaraciones', middleware, async (req, res) => {
   try {
     if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
-    const aclaraciones = await Aclaracion.find().sort({ createdAt: -1 });
+
+    if (esMaster(req)) {
+      const aclaraciones = await Aclaracion.find().sort({ createdAt: -1 });
+      return res.json(aclaraciones);
+    }
+
+    const misClientes = await Usuario.find({ rol: 'cliente', creadoPor: req.userId }).select('_id');
+    const misIds = misClientes.map(c => c._id);
+    const aclaraciones = await Aclaracion.find({ clienteId: { $in: misIds } }).sort({ createdAt: -1 });
     res.json(aclaraciones);
   } catch (error) {
     res.status(500).json({ error: error.message });
