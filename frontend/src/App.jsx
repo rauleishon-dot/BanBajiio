@@ -73,7 +73,7 @@ export default function BanbajioApp() {
 
   if (pantalla === 'login') return <LoginScreen login={login} />;
   if (pantalla === 'clienteDashboard' && usuario) return <ClienteDashboard usuario={usuario} logout={logout} token={token} />;
-  if (pantalla === 'adminDashboard' && usuario) return <AdminDashboard usuario={usuario} logout={logout} token={token} />;
+  if (pantalla === 'adminDashboard' && usuario) return <AdminDashboard usuario={usuario} logout={logout} token={token} esMaster={usuario.rol === 'master'} />;
 
   return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-600">Cargando...</p></div>;
 }
@@ -922,11 +922,12 @@ function ClienteDashboard({ usuario, logout, token }) {
 }
 
 // ============ ADMIN DASHBOARD ============
-function AdminDashboard({ usuario, logout, token }) {
+function AdminDashboard({ usuario, logout, token, esMaster }) {
   const [tab, setTab] = useState('clientes');
   const [clientes, setClientes] = useState([]);
   const [transacciones, setTransacciones] = useState([]);
   const [aclaraciones, setAclaraciones] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [telefonoSoporte, setTelefonoSoporte] = useState('');
   const [showNuevo, setShowNuevo] = useState(false);
   const [showDeposito, setShowDeposito] = useState(false);
@@ -939,18 +940,45 @@ function AdminDashboard({ usuario, logout, token }) {
   const [numeroCuenta, setNumeroCuenta] = useState('');
   const [clienteSelectId, setClienteSelectId] = useState('');
   const [montoDeposito, setMontoDeposito] = useState('');
+  const [nuevaPassCliente, setNuevaPassCliente] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+
+  // Estados para gestión de administradores (solo master)
+  const [showNuevoAdmin, setShowNuevoAdmin] = useState(false);
+  const [showEditarAdmin, setShowEditarAdmin] = useState(false);
+  const [adminEditando, setAdminEditando] = useState(null);
+  const [adminNombre, setAdminNombre] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminContraseña, setAdminContraseña] = useState('');
+
+  // Estados para editar/eliminar transacciones (solo master)
+  const [showEditarTx, setShowEditarTx] = useState(false);
+  const [txEditando, setTxEditando] = useState(null);
+  const [txMonto, setTxMonto] = useState('');
+  const [txEstado, setTxEstado] = useState('pendiente');
+  const [txDescripcion, setTxDescripcion] = useState('');
+
+  // Estados para cambiar mi propia contraseña
+  const [showCambiarPass, setShowCambiarPass] = useState(false);
+  const [passActual, setPassActual] = useState('');
+  const [passNueva, setPassNueva] = useState('');
+  const [passConfirmar, setPassConfirmar] = useState('');
 
   const loadData = async () => {
     setLoadingData(true);
     try {
-      const [cRes, txRes, acRes, cfgRes] = await Promise.all([
+      const peticiones = [
         fetch(`${apiUrl}/admin/clientes`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${apiUrl}/admin/transacciones`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${apiUrl}/admin/aclaraciones`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${apiUrl}/configuracion`, { headers: { 'Authorization': `Bearer ${token}` } })
-      ]);
+      ];
+      if (esMaster) {
+        peticiones.push(fetch(`${apiUrl}/master/admins`, { headers: { 'Authorization': `Bearer ${token}` } }));
+      }
+
+      const [cRes, txRes, acRes, cfgRes, adminsRes] = await Promise.all(peticiones);
 
       const c = await cRes.json();
       const tx = await txRes.json();
@@ -961,6 +989,11 @@ function AdminDashboard({ usuario, logout, token }) {
       if (Array.isArray(tx)) setTransacciones(tx);
       if (Array.isArray(ac)) setAclaraciones(ac);
       if (cfg.telefonoSoporte) setTelefonoSoporte(cfg.telefonoSoporte);
+
+      if (esMaster && adminsRes) {
+        const ad = await adminsRes.json();
+        if (Array.isArray(ad)) setAdmins(ad);
+      }
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -992,6 +1025,7 @@ function AdminDashboard({ usuario, logout, token }) {
     setEmail(cliente.email);
     setSaldo(cliente.saldo.toString());
     setNumeroCuenta(cliente.numeroCuenta);
+    setNuevaPassCliente('');
     setShowEditarCliente(true);
   };
 
@@ -1002,6 +1036,7 @@ function AdminDashboard({ usuario, logout, token }) {
     setEmail('');
     setSaldo('');
     setNumeroCuenta('');
+    setNuevaPassCliente('');
   };
 
   const crear = async () => {
@@ -1042,10 +1077,13 @@ function AdminDashboard({ usuario, logout, token }) {
 
     setLoading(true);
     try {
+      const body = { nombre, email, saldo: parseFloat(saldo) };
+      if (esMaster && nuevaPassCliente) body.contraseña = nuevaPassCliente;
+
       const res = await fetch(`${apiUrl}/admin/clientes/${clienteEditando._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ nombre, email, saldo: parseFloat(saldo) })
+        body: JSON.stringify(body)
       });
 
       if (res.ok) {
@@ -1172,15 +1210,214 @@ function AdminDashboard({ usuario, logout, token }) {
     }
   };
 
+  // ===== GESTIÓN DE ADMINISTRADORES (solo master) =====
+  const resetNuevoAdmin = () => {
+    setShowNuevoAdmin(false);
+    setAdminNombre('');
+    setAdminEmail('');
+    setAdminContraseña('');
+  };
+
+  const crearAdmin = async () => {
+    if (!adminNombre || !adminEmail || !adminContraseña) {
+      alert('Completa todos los campos');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/master/admins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ nombre: adminNombre, email: adminEmail, contraseña: adminContraseña })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✅ Administrador creado');
+        resetNuevoAdmin();
+        await loadData();
+      } else {
+        alert('Error: ' + (data.error || 'No se pudo crear'));
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const abrirEditarAdmin = (admin) => {
+    setAdminEditando(admin);
+    setAdminNombre(admin.nombre);
+    setAdminEmail(admin.email);
+    setAdminContraseña('');
+    setShowEditarAdmin(true);
+  };
+
+  const resetEditarAdmin = () => {
+    setShowEditarAdmin(false);
+    setAdminEditando(null);
+    setAdminNombre('');
+    setAdminEmail('');
+    setAdminContraseña('');
+  };
+
+  const guardarEditarAdmin = async () => {
+    setLoading(true);
+    try {
+      const body = { nombre: adminNombre, email: adminEmail };
+      if (adminContraseña) body.contraseña = adminContraseña;
+      const res = await fetch(`${apiUrl}/master/admins/${adminEditando._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        alert('✅ Administrador actualizado');
+        resetEditarAdmin();
+        await loadData();
+      } else {
+        alert('Error al actualizar');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const eliminarAdmin = async (id) => {
+    if (!window.confirm('¿Eliminar este administrador permanentemente?')) return;
+    try {
+      const res = await fetch(`${apiUrl}/master/admins/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert('✅ Administrador eliminado');
+        await loadData();
+      } else {
+        alert('Error al eliminar');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
+  // ===== EDITAR / ELIMINAR TRANSACCIONES (solo master) =====
+  const abrirEditarTx = (tx) => {
+    setTxEditando(tx);
+    setTxMonto(tx.monto.toString());
+    setTxEstado(tx.estado);
+    setTxDescripcion(tx.descripcion || '');
+    setShowEditarTx(true);
+  };
+
+  const resetEditarTx = () => {
+    setShowEditarTx(false);
+    setTxEditando(null);
+    setTxMonto('');
+    setTxEstado('pendiente');
+    setTxDescripcion('');
+  };
+
+  const guardarEditarTx = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/master/transacciones/${txEditando._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ monto: parseFloat(txMonto), estado: txEstado, descripcion: txDescripcion })
+      });
+      if (res.ok) {
+        alert('✅ Transacción actualizada');
+        resetEditarTx();
+        await loadData();
+      } else {
+        alert('Error al actualizar la transacción');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const eliminarTx = async (id) => {
+    if (!window.confirm('¿Eliminar esta transacción permanentemente? Esta acción no se puede deshacer.')) return;
+    try {
+      const res = await fetch(`${apiUrl}/master/transacciones/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert('✅ Transacción eliminada');
+        await loadData();
+      } else {
+        alert('Error al eliminar');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
+  // ===== CAMBIAR MI PROPIA CONTRASEÑA =====
+  const resetCambiarPass = () => {
+    setShowCambiarPass(false);
+    setPassActual('');
+    setPassNueva('');
+    setPassConfirmar('');
+  };
+
+  const guardarNuevaPass = async () => {
+    if (!passActual || !passNueva || !passConfirmar) {
+      alert('Completa todos los campos');
+      return;
+    }
+    if (passNueva.length < 8) {
+      alert('La nueva contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    if (passNueva !== passConfirmar) {
+      alert('La nueva contraseña y su confirmación no coinciden');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/perfil/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ actual: passActual, nueva: passNueva })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✅ Contraseña actualizada. Úsala la próxima vez que inicies sesión.');
+        resetCambiarPass();
+      } else {
+        alert('Error: ' + (data.error || 'No se pudo actualizar'));
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-gray-50 pb-12">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Panel Admin</h1>
-          <button onClick={logout} className="p-2 hover:bg-white/20 rounded-lg transition">
-            <LogOut size={24} />
-          </button>
+          <h1 className="text-2xl font-bold">{esMaster ? 'Panel Master 👑' : 'Panel Admin'}</h1>
+          <div className="flex gap-2">
+            {esMaster && (
+              <button onClick={() => setShowCambiarPass(true)} className="p-2 hover:bg-white/20 rounded-lg transition" title="Cambiar mi contraseña">
+                <Settings size={22} />
+              </button>
+            )}
+            <button onClick={logout} className="p-2 hover:bg-white/20 rounded-lg transition">
+              <LogOut size={24} />
+            </button>
+          </div>
         </div>
         <p className="text-white/80">Bienvenido, {usuario.nombre}</p>
       </div>
@@ -1211,6 +1448,14 @@ function AdminDashboard({ usuario, logout, token }) {
         >
           <Settings size={16} /> Config
         </button>
+        {esMaster && (
+          <button
+            onClick={() => setTab('administradores')}
+            className={`px-4 py-2 rounded-lg font-semibold transition ${tab === 'administradores' ? 'bg-blue-900 text-white' : 'bg-white text-blue-900 border-2 border-blue-900'}`}
+          >
+            👑 Administradores ({admins.length})
+          </button>
+        )}
       </div>
 
       {/* Content */}
@@ -1283,6 +1528,16 @@ function AdminDashboard({ usuario, logout, token }) {
                       </span>
                     </div>
                   </div>
+                  {esMaster && (
+                    <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                      <button onClick={() => abrirEditarTx(tx)} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition flex items-center justify-center gap-2 text-sm">
+                        <Edit size={14} /> Editar
+                      </button>
+                      <button onClick={() => eliminarTx(tx._id)} className="flex-1 py-2 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition flex items-center justify-center gap-2 text-sm">
+                        <Trash2 size={14} /> Eliminar
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1345,6 +1600,48 @@ function AdminDashboard({ usuario, logout, token }) {
               {loading ? 'Guardando...' : 'Guardar Cambios'}
             </button>
           </div>
+        </div>
+      )}
+
+      {tab === 'administradores' && esMaster && (
+        <div className="p-4">
+          <div className="bg-blue-900 text-white rounded-xl p-4 mb-4 text-sm">
+            👑 Como usuario Master, tú controlas a todos los administradores y puedes editar o eliminar cualquier transacción del sistema.
+          </div>
+          <button
+            onClick={() => setShowNuevoAdmin(true)}
+            className="w-full bg-gradient-to-r from-blue-900 to-blue-700 text-white py-3 rounded-lg font-semibold mb-6 flex items-center justify-center gap-2 hover:from-blue-950 hover:to-blue-800 transition"
+          >
+            <Plus size={20} /> Crear Administrador
+          </button>
+
+          {loadingData ? (
+            <p className="text-gray-500 text-center py-8">Cargando...</p>
+          ) : admins.length > 0 ? (
+            <div className="space-y-3">
+              {admins.map(a => (
+                <div key={a._id} className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold text-gray-900">{a.nombre}</p>
+                      <p className="text-gray-500 text-sm">{a.email}</p>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">Admin</span>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => abrirEditarAdmin(a)} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition flex items-center justify-center gap-2">
+                      <Edit size={16} /> Editar
+                    </button>
+                    <button onClick={() => eliminarAdmin(a._id)} className="flex-1 py-2 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 transition flex items-center justify-center gap-2">
+                      <Trash2 size={16} /> Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">No hay administradores creados</p>
+          )}
         </div>
       )}
 
@@ -1460,6 +1757,19 @@ function AdminDashboard({ usuario, logout, token }) {
                 <p className="text-xs text-blue-700">Vencimiento: {clienteEditando?.tarjetaVirtual?.fechaVencimiento ? new Date(clienteEditando.tarjetaVirtual.fechaVencimiento).toLocaleDateString() : 'N/A'}</p>
               </div>
 
+              {esMaster && (
+                <div className="bg-yellow-50 rounded-lg p-4 border-2 border-yellow-200">
+                  <label className="block text-sm font-semibold text-yellow-900 mb-2">🔒 Resetear contraseña (solo Master)</label>
+                  <input
+                    type="password"
+                    value={nuevaPassCliente}
+                    onChange={(e) => setNuevaPassCliente(e.target.value)}
+                    placeholder="Dejar vacío para no cambiarla"
+                    className="w-full px-4 py-3 border-2 border-yellow-300 rounded-lg focus:border-yellow-500 focus:outline-none bg-white"
+                  />
+                </div>
+              )}
+
               <div className="flex gap-3 pt-6 border-t-2 border-gray-200">
                 <button
                   onClick={resetEditar}
@@ -1523,6 +1833,218 @@ function AdminDashboard({ usuario, logout, token }) {
                   className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 transition"
                 >
                   {loading ? 'Procesando...' : 'Depositar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear Administrador (solo master) */}
+      {showNuevoAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-96 overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-6 text-gray-900">👑 Crear Administrador</h3>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={adminNombre}
+                onChange={(e) => setAdminNombre(e.target.value)}
+                placeholder="Nombre completo"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+              />
+              <input
+                type="email"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+              />
+              <input
+                type="password"
+                value={adminContraseña}
+                onChange={(e) => setAdminContraseña(e.target.value)}
+                placeholder="Contraseña"
+                className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+              />
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetNuevoAdmin}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={crearAdmin}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-950 hover:to-blue-800 disabled:opacity-50 transition"
+                >
+                  {loading ? 'Creando...' : 'Crear'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Administrador (solo master) */}
+      {showEditarAdmin && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-6 text-gray-900">👑 Editar Administrador</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre</label>
+                <input
+                  type="text"
+                  value={adminNombre}
+                  onChange={(e) => setAdminNombre(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Nueva contraseña (opcional)</label>
+                <input
+                  type="password"
+                  value={adminContraseña}
+                  onChange={(e) => setAdminContraseña(e.target.value)}
+                  placeholder="Dejar vacío para no cambiarla"
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetEditarAdmin}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarEditarAdmin}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-950 hover:to-blue-800 disabled:opacity-50 transition"
+                >
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Transacción (solo master) */}
+      {showEditarTx && txEditando && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-2 text-gray-900">👑 Editar Transacción</h3>
+            <p className="text-xs text-gray-500 font-mono mb-6">Ref: {txEditando._id.slice(-8).toUpperCase()}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Monto</label>
+                <input
+                  type="number"
+                  value={txMonto}
+                  onChange={(e) => setTxMonto(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Estado</label>
+                <select
+                  value={txEstado}
+                  onChange={(e) => setTxEstado(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none bg-white"
+                >
+                  <option value="pendiente">Pendiente</option>
+                  <option value="completada">Completada</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Concepto</label>
+                <input
+                  type="text"
+                  value={txDescripcion}
+                  onChange={(e) => setTxDescripcion(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetEditarTx}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarEditarTx}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-950 hover:to-blue-800 disabled:opacity-50 transition"
+                >
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cambiar Mi Contraseña */}
+      {showCambiarPass && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl p-6 max-h-screen overflow-y-auto">
+            <h3 className="text-2xl font-bold mb-2 text-gray-900">🔒 Cambiar mi contraseña</h3>
+            <p className="text-xs text-gray-500 mb-6">Recomendado hacerlo la primera vez que inicias sesión con una contraseña por defecto.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña actual</label>
+                <input
+                  type="password"
+                  value={passActual}
+                  onChange={(e) => setPassActual(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Nueva contraseña</label>
+                <input
+                  type="password"
+                  value={passNueva}
+                  onChange={(e) => setPassNueva(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Confirmar nueva contraseña</label>
+                <input
+                  type="password"
+                  value={passConfirmar}
+                  onChange={(e) => setPassConfirmar(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={resetCambiarPass}
+                  className="flex-1 py-3 border-2 border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarNuevaPass}
+                  disabled={loading}
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-800 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-900 hover:to-blue-700 disabled:opacity-50 transition"
+                >
+                  {loading ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
             </div>
