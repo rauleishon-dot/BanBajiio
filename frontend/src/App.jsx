@@ -222,26 +222,6 @@ function ClienteDashboard({ usuario, logout, token }) {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTransacciones(prev => {
-        let cambio = false;
-        const next = prev.map(tx => {
-          if (tx.estado === 'pendiente') {
-            const minutos = (Date.now() - new Date(tx.createdAt).getTime()) / 60000;
-            if (minutos >= 30) {
-              cambio = true;
-              return { ...tx, estado: 'completada' };
-            }
-          }
-          return tx;
-        });
-        return cambio ? next : prev;
-      });
-    }, 60000);
-    return () => clearInterval(timer);
-  }, []);
-
   const copiarCuenta = () => {
     navigator.clipboard.writeText(usuario.numeroCuenta);
     setCopied(true);
@@ -347,11 +327,13 @@ function ClienteDashboard({ usuario, logout, token }) {
   const getEstadoColor = (estado) => {
     if (estado === 'pendiente') return 'bg-yellow-100 text-yellow-800';
     if (estado === 'completada') return 'bg-green-100 text-green-800';
+    if (estado === 'declinada') return 'bg-red-100 text-red-800';
     return 'bg-gray-100 text-gray-800';
   };
 
   const getEstadoTexto = (estado) => {
     if (estado === 'pendiente') return '⏳ Pendiente';
+    if (estado === 'declinada') return '❌ Declinada';
     return '✅ Completada';
   };
 
@@ -760,6 +742,16 @@ function ClienteDashboard({ usuario, logout, token }) {
           <div className="bg-gray-50 w-full rounded-t-3xl max-h-screen overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {(() => {
               const esEmisor = txDetalle.emisorId === usuario._id;
+              const esDeposito = txDetalle.tipo === 'deposito';
+
+              const iconoBg = txDetalle.estado === 'declinada' ? 'bg-red-500' : txDetalle.estado === 'pendiente' ? 'bg-yellow-500' : 'bg-green-500';
+              const IconoEstado = txDetalle.estado === 'declinada' ? X : CheckCircle2;
+
+              let mensaje = '¡Tu transferencia fue exitosa!';
+              if (esDeposito) mensaje = '¡Depósito recibido!';
+              else if (txDetalle.estado === 'pendiente') mensaje = '¡Tu transferencia está en proceso!';
+              else if (txDetalle.estado === 'declinada') mensaje = 'Transferencia declinada';
+
               return (
                 <div className="p-6 pb-10">
                   <div className="flex justify-end">
@@ -770,42 +762,70 @@ function ClienteDashboard({ usuario, logout, token }) {
 
                   <div className="flex flex-col items-center text-center mb-6 -mt-2">
                     <div className="w-20 h-20 rounded-full bg-white shadow flex items-center justify-center mb-4">
-                      <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center">
-                        <CheckCircle2 className="text-white" size={32} />
+                      <div className={`w-14 h-14 rounded-full ${iconoBg} flex items-center justify-center`}>
+                        <IconoEstado className="text-white" size={32} />
                       </div>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900">
-                      {txDetalle.estado === 'pendiente' ? '¡Tu transferencia está en proceso!' : '¡Tu transferencia fue exitosa!'}
-                    </h3>
+                    <h3 className="text-xl font-bold text-gray-900">{mensaje}</h3>
                   </div>
 
-                  <p className="text-center text-gray-500 font-semibold mb-1">{esEmisor ? 'Envié' : 'Recibí'}</p>
+                  <p className="text-center text-gray-500 font-semibold mb-1">{esDeposito ? 'Recibí' : esEmisor ? 'Envié' : 'Recibí'}</p>
                   <p className="text-center text-4xl font-bold text-gray-900 mb-6">
                     {formatearDinero(txDetalle.monto)} <span className="text-lg text-gray-400 font-semibold">MXN</span>
                   </p>
 
-                  <div className="bg-white rounded-2xl shadow p-5 mb-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center">
-                        <p className="text-xs text-gray-400 mb-2">Desde</p>
-                        <div className="w-12 h-12 mx-auto rounded-full bg-blue-100 flex items-center justify-center mb-2">
-                          <Wallet className="text-blue-700" size={22} />
-                        </div>
-                        <p className="font-bold text-gray-900 text-sm">{esEmisor ? usuario.nombre : txDetalle.emisor.nombre}</p>
-                        <p className="text-xs text-gray-400 mt-1">Cuenta ****{(esEmisor ? usuario.numeroCuenta : txDetalle.emisor.numeroCuenta || '').slice(-4)}</p>
+                  {esDeposito ? (
+                    <div className="bg-white rounded-2xl shadow p-5 mb-4 space-y-3">
+                      <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Origen del depósito</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Cuenta</span>
+                        <span className="text-gray-900 font-mono font-semibold text-sm">{txDetalle.cuentaOrigenExterna || '—'}</span>
                       </div>
-                      <div className="text-center border-l border-gray-100">
-                        <p className="text-xs text-gray-400 mb-2">Para</p>
-                        <div className="w-12 h-12 mx-auto rounded-full bg-gray-200 flex items-center justify-center mb-2">
-                          <ArrowUpRight className="text-gray-600" size={22} />
-                        </div>
-                        <p className="font-bold text-gray-900 text-sm">{esEmisor ? txDetalle.receptorNombre : usuario.nombre}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {esEmisor ? (txDetalle.bancoDestino || NOMBRE_APP) : NOMBRE_APP} ****{(esEmisor ? txDetalle.receptorNumeroCuenta : usuario.numeroCuenta || '').slice(-4)}
-                        </p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Sucursal</span>
+                        <span className="text-gray-900 font-mono font-semibold text-sm">{txDetalle.sucursal || '0423'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Referencia</span>
+                        <span className="text-gray-900 font-mono font-semibold text-sm">{txDetalle.referencia || '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                        <span className="text-gray-400 text-sm">Saldo anterior</span>
+                        <span className="text-gray-900 font-semibold text-sm">{txDetalle.saldoAnterior !== undefined ? formatearDinero(txDetalle.saldoAnterior) : '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Saldo posterior</span>
+                        <span className="text-green-700 font-bold text-sm">{txDetalle.saldoPosterior !== undefined ? formatearDinero(txDetalle.saldoPosterior) : '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-sm">Hora</span>
+                        <span className="text-gray-900 font-semibold text-sm">{new Date(txDetalle.createdAt).toLocaleTimeString('es-MX')}</span>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl shadow p-5 mb-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center">
+                          <p className="text-xs text-gray-400 mb-2">Desde</p>
+                          <div className="w-12 h-12 mx-auto rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                            <Wallet className="text-blue-700" size={22} />
+                          </div>
+                          <p className="font-bold text-gray-900 text-sm">{esEmisor ? usuario.nombre : txDetalle.emisor.nombre}</p>
+                          <p className="text-xs text-gray-400 mt-1">Cuenta ****{(esEmisor ? usuario.numeroCuenta : txDetalle.emisor.numeroCuenta || '').slice(-4)}</p>
+                        </div>
+                        <div className="text-center border-l border-gray-100">
+                          <p className="text-xs text-gray-400 mb-2">Para</p>
+                          <div className="w-12 h-12 mx-auto rounded-full bg-gray-200 flex items-center justify-center mb-2">
+                            <ArrowUpRight className="text-gray-600" size={22} />
+                          </div>
+                          <p className="font-bold text-gray-900 text-sm">{esEmisor ? txDetalle.receptorNombre : usuario.nombre}</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {esEmisor ? (txDetalle.bancoDestino || NOMBRE_APP) : NOMBRE_APP} ****{(esEmisor ? txDetalle.receptorNumeroCuenta : usuario.numeroCuenta || '').slice(-4)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="bg-white rounded-2xl shadow p-5 space-y-3">
                     {txDetalle.descripcion && (
@@ -1523,8 +1543,8 @@ function AdminDashboard({ usuario, logout, token, esMaster }) {
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-green-600">{formatearDinero(tx.monto)}</p>
-                      <span className={`text-xs px-2 py-1 rounded-full ${tx.estado === 'pendiente' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                        {tx.estado === 'pendiente' ? '⏳ Pendiente' : '✅ Completada'}
+                      <span className={`text-xs px-2 py-1 rounded-full ${tx.estado === 'pendiente' ? 'bg-yellow-100 text-yellow-800' : tx.estado === 'declinada' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                        {tx.estado === 'pendiente' ? '⏳ Pendiente' : tx.estado === 'declinada' ? '❌ Declinada' : '✅ Completada'}
                       </span>
                     </div>
                   </div>
@@ -1966,6 +1986,7 @@ function AdminDashboard({ usuario, logout, token, esMaster }) {
                 >
                   <option value="pendiente">Pendiente</option>
                   <option value="completada">Completada</option>
+                  <option value="declinada">Declinada</option>
                 </select>
               </div>
               <div>

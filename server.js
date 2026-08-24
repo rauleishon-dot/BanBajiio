@@ -29,6 +29,7 @@ const usuarioSchema = new mongoose.Schema({
     ultimosDigitos: String
   },
   rol: { type: String, enum: ['master', 'admin', 'cliente'], default: 'cliente' },
+  creadoPor: { type: mongoose.Schema.Types.ObjectId, default: null }, // admin/master que creó este cliente
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -40,7 +41,14 @@ const transaccionSchema = new mongoose.Schema({
   bancoDestino: { type: String, default: 'Novo Opciones' },
   monto: Number,
   descripcion: String,
-  estado: { type: String, enum: ['pendiente', 'completada'], default: 'pendiente' },
+  tipo: { type: String, enum: ['transferencia', 'deposito'], default: 'transferencia' },
+  // Datos de recibo, solo se usan cuando tipo === 'deposito'
+  cuentaOrigenExterna: String,
+  sucursal: { type: String, default: '0423' },
+  referencia: String,
+  saldoAnterior: Number,
+  saldoPosterior: Number,
+  estado: { type: String, enum: ['pendiente', 'completada', 'declinada'], default: 'pendiente' },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -65,6 +73,26 @@ const Configuracion = mongoose.model('Configuracion', configuracionSchema);
 // ===== FUNCIONES HELPERS =====
 function generarNumeroCuenta() {
   return Math.floor(Math.random() * 9000000000) + 1000000000;
+}
+
+function generarDigitos(cantidad) {
+  let resultado = '';
+  for (let i = 0; i < cantidad; i++) {
+    resultado += Math.floor(Math.random() * 10).toString();
+  }
+  return resultado;
+}
+
+// Cambia a "declinada" cualquier transferencia que lleve 1,440 minutos (24 hrs) pendiente.
+// Se calcula contra la hora real guardada en la base de datos, así que no depende
+// de que el cliente tenga la app abierta.
+const MINUTOS_LIMITE_PENDIENTE = 1440;
+async function declinarTransferenciasVencidas() {
+  const limite = new Date(Date.now() - MINUTOS_LIMITE_PENDIENTE * 60000);
+  await Transaccion.updateMany(
+    { estado: 'pendiente', tipo: 'transferencia', createdAt: { $lte: limite } },
+    { $set: { estado: 'declinada' } }
+  );
 }
 
 function generarTarjetaVirtual(nombre) {
@@ -113,6 +141,11 @@ function esMaster(req) {
   return req.rol === 'master';
 }
 
+function esDuenoDeCliente(req, cliente) {
+  if (esMaster(req)) return true;
+  return cliente.creadoPor && cliente.creadoPor.toString() === req.userId;
+}
+
 // ===== RUTAS PÚBLICAS =====
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -152,7 +185,10 @@ app.get('/api/perfil', middleware, async (req, res) => {
 
 app.get('/api/mis-transacciones', middleware, async (req, res) => {
   try {
-    const transacciones = await Transaccion.find({ emisorId: req.userId }).sort({ createdAt: -1 });
+    await declinarTransferenciasVencidas();
+    const transacciones = await Transaccion.find({
+      $or: [{ emisorId: req.userId }, { receptorNumeroCuenta: (await Usuario.findById(req.userId))?.numeroCuenta }]
+    }).sort({ createdAt: -1 });
     res.json(transacciones);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -304,18 +340,41 @@ app.post('/api/admin/clientes', middleware, async (req, res) => {
     const hashedPassword = await bcrypt.hash(contraseña, 10);
     const numeroCuenta = generarNumeroCuenta().toString();
     const tarjetaVirtual = generarTarjetaVirtual(nombre);
+    const montoInicial = saldoInicial || 0;
 
     const usuario = new Usuario({
       nombre,
       email,
       contraseña: hashedPassword,
-      saldo: saldoInicial || 0,
+      saldo: montoInicial,
       numeroCuenta,
       tarjetaVirtual,
-      rol: 'cliente'
+      rol: 'cliente',
+      creadoPor: req.userId
     });
 
     await usuario.save();
+
+    // Si se le dio saldo inicial, generamos el recibo de depósito
+    if (montoInicial > 0) {
+      const transaccion = new Transaccion({
+        emisorId: null,
+        emisor: { nombre: 'Depósito Inicial', numeroCuenta: generarDigitos(16) },
+        receptorNumeroCuenta: numeroCuenta,
+        receptorNombre: nombre,
+        monto: montoInicial,
+        descripcion: 'Depósito inicial de apertura de cuenta',
+        tipo: 'deposito',
+        cuentaOrigenExterna: generarDigitos(16),
+        sucursal: '0423',
+        referencia: generarDigitos(7),
+        saldoAnterior: 0,
+        saldoPosterior: montoInicial,
+        estado: 'completada'
+      });
+      await transaccion.save();
+    }
+
     res.json({
       success: true,
       usuario: {
@@ -335,7 +394,8 @@ app.post('/api/admin/clientes', middleware, async (req, res) => {
 app.get('/api/admin/clientes', middleware, async (req, res) => {
   try {
     if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
-    const clientes = await Usuario.find({ rol: 'cliente' }).select('-contraseña');
+    const filtro = esMaster(req) ? { rol: 'cliente' } : { rol: 'cliente', creadoPor: req.userId };
+    const clientes = await Usuario.find(filtro).select('-contraseña');
     res.json(clientes);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -350,6 +410,7 @@ app.put('/api/admin/clientes/:id/numeroCuenta', middleware, async (req, res) => 
     const cliente = await Usuario.findById(req.params.id);
 
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+    if (!esDuenoDeCliente(req, cliente)) return res.status(403).json({ error: 'No autorizado' });
 
     const existente = await Usuario.findOne({ numeroCuenta: nuevoCuenta });
     if (existente && existente._id.toString() !== req.params.id) {
@@ -373,6 +434,7 @@ app.put('/api/admin/clientes/:id', middleware, async (req, res) => {
     const cliente = await Usuario.findById(req.params.id);
 
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+    if (!esDuenoDeCliente(req, cliente)) return res.status(403).json({ error: 'No autorizado' });
 
     if (nombre) cliente.nombre = nombre;
     if (email && email !== cliente.email) {
@@ -399,9 +461,11 @@ app.delete('/api/admin/clientes/:id', middleware, async (req, res) => {
   try {
     if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
 
-    const cliente = await Usuario.findByIdAndDelete(req.params.id);
-
+    const cliente = await Usuario.findById(req.params.id);
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+    if (!esDuenoDeCliente(req, cliente)) return res.status(403).json({ error: 'No autorizado' });
+
+    await Usuario.findByIdAndDelete(req.params.id);
 
     res.json({ success: true, message: 'Cliente eliminado' });
   } catch (error) {
@@ -417,17 +481,25 @@ app.post('/api/admin/deposito', middleware, async (req, res) => {
     const cliente = await Usuario.findById(clienteId);
 
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+    if (!esDuenoDeCliente(req, cliente)) return res.status(403).json({ error: 'No autorizado' });
 
+    const saldoAntes = cliente.saldo;
     cliente.saldo += monto;
     await cliente.save();
 
     const transaccion = new Transaccion({
       emisorId: null,
-      emisor: { nombre: 'Depósito Admin', numeroCuenta: 'ADMIN' },
+      emisor: { nombre: 'Depósito', numeroCuenta: generarDigitos(16) },
       receptorNumeroCuenta: cliente.numeroCuenta,
       receptorNombre: cliente.nombre,
       monto,
-      descripcion: descripcion || 'Depósito del administrador',
+      descripcion: descripcion || 'Depósito',
+      tipo: 'deposito',
+      cuentaOrigenExterna: generarDigitos(16),
+      sucursal: '0423',
+      referencia: generarDigitos(7),
+      saldoAnterior: saldoAntes,
+      saldoPosterior: cliente.saldo,
       estado: 'completada'
     });
 
@@ -476,7 +548,25 @@ app.post('/api/admin/transferencia', middleware, async (req, res) => {
 app.get('/api/admin/transacciones', middleware, async (req, res) => {
   try {
     if (!esAdminOMaster(req)) return res.status(403).json({ error: 'No autorizado' });
-    const transacciones = await Transaccion.find().sort({ createdAt: -1 });
+    await declinarTransferenciasVencidas();
+
+    if (esMaster(req)) {
+      const transacciones = await Transaccion.find().sort({ createdAt: -1 });
+      return res.json(transacciones);
+    }
+
+    // Un admin normal solo ve transacciones de SUS clientes
+    const misClientes = await Usuario.find({ rol: 'cliente', creadoPor: req.userId }).select('_id numeroCuenta');
+    const misIds = misClientes.map(c => c._id.toString());
+    const misCuentas = misClientes.map(c => c.numeroCuenta);
+
+    const transacciones = await Transaccion.find({
+      $or: [
+        { emisorId: { $in: misIds } },
+        { receptorNumeroCuenta: { $in: misCuentas } }
+      ]
+    }).sort({ createdAt: -1 });
+
     res.json(transacciones);
   } catch (error) {
     res.status(500).json({ error: error.message });
